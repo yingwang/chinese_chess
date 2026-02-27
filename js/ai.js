@@ -226,6 +226,8 @@ export const OpeningBook = {
 
 // === ChessAI ===
 
+const MAX_HISTORY_SCORE = 8000;
+
 export class ChessAI {
   constructor(maxDepth = 6, timeLimit = 5000, quiescenceDepth = 3) {
     this.maxDepth = maxDepth;
@@ -401,8 +403,8 @@ export class ChessAI {
     if (!isNullMove && !inCheck && depth >= 3) {
       const nullBoard = board.copy();
       nullBoard.currentPlayer = PieceColor.opposite(board.currentPlayer);
-      const R = depth >= 6 ? 3 : 2;
-      const nullScore = this._alphaBeta(nullBoard, depth - 1 - R, alpha, beta, !maximizing, true, ply + 1);
+      const nullMoveReduction = depth >= 6 ? 3 : 2;
+      const nullScore = this._alphaBeta(nullBoard, depth - 1 - nullMoveReduction, alpha, beta, !maximizing, true, ply + 1);
       if (this.timeUp) return 0;
       if (maximizing && nullScore >= beta) return beta;
       if (!maximizing && nullScore <= alpha) return alpha;
@@ -599,7 +601,7 @@ export class ChessAI {
     }
 
     // History heuristic
-    score += Math.min(this._getHistoryScore(move), 8000);
+    score += Math.min(this._getHistoryScore(move), MAX_HISTORY_SCORE);
 
     // Center control (cols 3-5)
     if (move.to.col >= 3 && move.to.col <= 5) {

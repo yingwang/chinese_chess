@@ -1,6 +1,7 @@
 import { PieceColor, PieceType } from './model.js';
 import { GameController, AI_DIFFICULTY, GAME_MODE } from './controller.js';
 import { BoardView } from './view.js';
+import { SoundManager } from './audio.js';
 
 // DOM elements
 const canvas = document.getElementById('board-canvas');
@@ -8,6 +9,7 @@ const statusEl = document.getElementById('status');
 const newGameBtn = document.getElementById('new-game-btn');
 const undoBtn = document.getElementById('undo-btn');
 const settingsBtn = document.getElementById('settings-btn');
+const soundBtn = document.getElementById('sound-btn');
 const newGameDialog = document.getElementById('new-game-dialog');
 const gameOverDialog = document.getElementById('game-over-dialog');
 const gameModeSelect = document.getElementById('game-mode-select');
@@ -27,6 +29,7 @@ const infoPanel = document.getElementById('info-panel');
 // Initialize
 const boardView = new BoardView(canvas);
 const controller = new GameController();
+const soundManager = new SoundManager();
 let aiThinking = false;
 let gameStartTime = null;
 let timerInterval = null;
@@ -48,6 +51,16 @@ controller.onMoveCompleted = (move) => {
     boardView.highlightMove(move);
     updateStatus();
     updateMoveHistory();
+
+    // Play appropriate sound effect
+    const board = controller.getCurrentBoard();
+    if (board.isInCheck(board.currentPlayer)) {
+        soundManager.playCheckSound();
+    } else if (move.isCapture()) {
+        soundManager.playCaptureSound();
+    } else {
+        soundManager.playMoveSound();
+    }
 };
 
 controller.onAIThinking = (thinking) => {
@@ -209,6 +222,9 @@ startGameBtn.addEventListener('click', () => {
     moveHistoryEl.innerHTML = '';
     startTimer();
     updateStatus();
+
+    // Start background music (requires user interaction)
+    soundManager.startBackgroundMusic();
 });
 
 undoBtn.addEventListener('click', () => {
@@ -216,6 +232,11 @@ undoBtn.addEventListener('click', () => {
     controller.undoLastMove();
     updateStatus();
     updateMoveHistory();
+});
+
+soundBtn.addEventListener('click', () => {
+    const muted = soundManager.toggleMute();
+    soundBtn.textContent = muted ? '🔇 音效' : '🔊 音效';
 });
 
 gameOverNewGameBtn.addEventListener('click', () => {

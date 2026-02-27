@@ -22,6 +22,7 @@ const gameOverMessage = document.getElementById('game-over-message');
 const gameOverNewGameBtn = document.getElementById('game-over-new-game-btn');
 const elapsedTimeEl = document.getElementById('elapsed-time');
 const moveHistoryEl = document.getElementById('move-history');
+const infoPanel = document.getElementById('info-panel');
 
 // Initialize
 const boardView = new BoardView(canvas);
@@ -162,6 +163,7 @@ startGameBtn.addEventListener('click', () => {
     controller.startNewGame();
 
     newGameDialog.classList.add('hidden');
+    infoPanel.classList.remove('hidden');
     moveHistoryEl.innerHTML = '';
     startTimer();
     updateStatus();

@@ -29,7 +29,6 @@ const controller = new GameController();
 let aiThinking = false;
 let gameStartTime = null;
 let timerInterval = null;
-let gameStarted = false;
 
 // Connect view to controller
 boardView.setOnMoveListener((move) => {
@@ -109,7 +108,7 @@ function updateMoveHistory() {
         const prefix = (i % 2 === 0) ? moveNum + '. ' : '';
         const span = document.createElement('span');
         span.className = 'move-entry ' + colorClass;
-        span.textContent = prefix + pieceName + '(' + move.from + ')' + capture + '(' + move.to + ') ';
+        span.textContent = `${prefix}${pieceName}(${move.from})${capture}(${move.to}) `;
         moveHistoryEl.appendChild(span);
     }
     moveHistoryEl.scrollTop = moveHistoryEl.scrollHeight;
@@ -148,9 +147,7 @@ newGameBtn.addEventListener('click', showNewGameDialog);
 settingsBtn.addEventListener('click', showNewGameDialog);
 
 cancelBtn.addEventListener('click', () => {
-    if (gameStarted) {
-        newGameDialog.classList.add('hidden');
-    }
+    newGameDialog.classList.add('hidden');
 });
 
 startGameBtn.addEventListener('click', () => {
@@ -165,7 +162,6 @@ startGameBtn.addEventListener('click', () => {
     controller.startNewGame();
 
     newGameDialog.classList.add('hidden');
-    gameStarted = true;
     moveHistoryEl.innerHTML = '';
     startTimer();
     updateStatus();
@@ -191,6 +187,7 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Show setup dialog on initial load instead of starting directly
+// Start default game and show setup dialog on initial load
+controller.startNewGame();
 showNewGameDialog();
 statusEl.textContent = '请选择游戏设置';

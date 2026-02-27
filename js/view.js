@@ -134,8 +134,9 @@ export class BoardView {
   draw() {
     if (!this.board) return;
     const ctx = this.ctx;
-    const w = this.canvas.width / devicePixelRatio;
-    const h = this.canvas.height / devicePixelRatio;
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.canvas.width / dpr;
+    const h = this.canvas.height / dpr;
 
     // Clear with dark background
     ctx.fillStyle = '#1a1a2e';

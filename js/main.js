@@ -103,6 +103,7 @@ startGameBtn.addEventListener('click', () => {
     const modeKey = gameModeSelect.value;
     const mode = GAME_MODE[modeKey];
     const difficulty = AI_DIFFICULTY[difficultySelect.value];
+    // colorSelect is the player's color; AI plays the opposite side
     const aiColor = colorSelect.value === 'RED' ? PieceColor.BLACK : PieceColor.RED;
 
     controller.setGameMode(mode, aiColor);

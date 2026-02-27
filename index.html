@@ -141,7 +141,8 @@
             align-items: center;
             z-index: 100;
         }
-        .modal.hidden {
+        .modal.hidden,
+        #info-panel.hidden {
             display: none;
         }
         .modal-content {
@@ -222,7 +223,7 @@
             <button id="undo-btn">悔棋</button>
             <button id="settings-btn">设置</button>
         </div>
-        <div id="info-panel">
+        <div id="info-panel" class="hidden">
             <div id="timer-display">
                 <span class="info-label">时间:</span>
                 <span id="elapsed-time">00:00</span>

@@ -79,6 +79,58 @@
             background: #0f1a30;
         }
 
+        /* Info panel */
+        #info-panel {
+            width: 100%;
+            background: #16213e;
+            border: 1px solid #ffd70033;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-top: 4px;
+        }
+        #timer-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .info-label {
+            color: #ffd700;
+            font-size: 0.95em;
+            white-space: nowrap;
+        }
+        #elapsed-time {
+            color: #eee;
+            font-size: 1em;
+            font-variant-numeric: tabular-nums;
+        }
+        #history-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        #move-history {
+            max-height: 120px;
+            overflow-y: auto;
+            color: #ccc;
+            font-size: 0.85em;
+            line-height: 1.6;
+            padding: 4px 0;
+        }
+        #move-history:empty::after {
+            content: '暂无记录';
+            color: #666;
+        }
+        .move-entry {
+            display: inline;
+        }
+        .move-entry.red {
+            color: #e06060;
+        }
+        .move-entry.black {
+            color: #aaa;
+        }
+
         /* Modal */
         .modal {
             position: fixed;
@@ -168,6 +220,17 @@
         <div id="controls">
             <button id="new-game-btn">新游戏</button>
             <button id="undo-btn">悔棋</button>
+            <button id="settings-btn">设置</button>
+        </div>
+        <div id="info-panel">
+            <div id="timer-display">
+                <span class="info-label">时间:</span>
+                <span id="elapsed-time">00:00</span>
+            </div>
+            <div id="history-panel">
+                <span class="info-label">走棋记录:</span>
+                <div id="move-history"></div>
+            </div>
         </div>
     </div>
 

@@ -7,6 +7,7 @@ const canvas = document.getElementById('board-canvas');
 const statusEl = document.getElementById('status');
 const newGameBtn = document.getElementById('new-game-btn');
 const undoBtn = document.getElementById('undo-btn');
+const settingsBtn = document.getElementById('settings-btn');
 const newGameDialog = document.getElementById('new-game-dialog');
 const gameOverDialog = document.getElementById('game-over-dialog');
 const gameModeSelect = document.getElementById('game-mode-select');
@@ -19,11 +20,15 @@ const cancelBtn = document.getElementById('cancel-btn');
 const gameOverTitle = document.getElementById('game-over-title');
 const gameOverMessage = document.getElementById('game-over-message');
 const gameOverNewGameBtn = document.getElementById('game-over-new-game-btn');
+const elapsedTimeEl = document.getElementById('elapsed-time');
+const moveHistoryEl = document.getElementById('move-history');
 
 // Initialize
 const boardView = new BoardView(canvas);
 const controller = new GameController();
 let aiThinking = false;
+let gameStartTime = null;
+let timerInterval = null;
 
 // Connect view to controller
 boardView.setOnMoveListener((move) => {
@@ -41,6 +46,7 @@ controller.onBoardUpdated = (board) => {
 controller.onMoveCompleted = (move) => {
     boardView.highlightMove(move);
     updateStatus();
+    updateMoveHistory();
 };
 
 controller.onAIThinking = (thinking) => {
@@ -53,6 +59,7 @@ controller.onAIThinking = (thinking) => {
 };
 
 controller.onGameOver = (result) => {
+    stopTimer();
     showGameOverDialog(result);
 };
 
@@ -63,6 +70,48 @@ function updateStatus() {
     const inCheck = board.isInCheck(board.currentPlayer);
     const playerName = board.currentPlayer === PieceColor.RED ? '红方' : '黑方';
     statusEl.textContent = playerName + '走棋' + (inCheck ? ' — 将军!' : '');
+}
+
+// Timer
+function startTimer() {
+    stopTimer();
+    gameStartTime = Date.now();
+    elapsedTimeEl.textContent = '00:00';
+    timerInterval = setInterval(updateTimer, 1000);
+}
+
+function stopTimer() {
+    if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+    }
+}
+
+function updateTimer() {
+    if (!gameStartTime) return;
+    const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+    const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const seconds = String(elapsed % 60).padStart(2, '0');
+    elapsedTimeEl.textContent = minutes + ':' + seconds;
+}
+
+// Move history
+function updateMoveHistory() {
+    const history = controller.getMoveHistory();
+    moveHistoryEl.innerHTML = '';
+    for (let i = 0; i < history.length; i++) {
+        const move = history[i];
+        const pieceName = move.piece.type.getDisplayName(move.piece.color);
+        const colorClass = move.piece.color === PieceColor.RED ? 'red' : 'black';
+        const capture = move.isCapture() ? '吃' : '→';
+        const moveNum = Math.floor(i / 2) + 1;
+        const prefix = (i % 2 === 0) ? moveNum + '. ' : '';
+        const span = document.createElement('span');
+        span.className = 'move-entry ' + colorClass;
+        span.textContent = `${prefix}${pieceName}(${move.from})${capture}(${move.to}) `;
+        moveHistoryEl.appendChild(span);
+    }
+    moveHistoryEl.scrollTop = moveHistoryEl.scrollHeight;
 }
 
 // Game Over dialog
@@ -95,6 +144,8 @@ gameModeSelect.addEventListener('change', updateDialogVisibility);
 
 newGameBtn.addEventListener('click', showNewGameDialog);
 
+settingsBtn.addEventListener('click', showNewGameDialog);
+
 cancelBtn.addEventListener('click', () => {
     newGameDialog.classList.add('hidden');
 });
@@ -111,6 +162,8 @@ startGameBtn.addEventListener('click', () => {
     controller.startNewGame();
 
     newGameDialog.classList.add('hidden');
+    moveHistoryEl.innerHTML = '';
+    startTimer();
     updateStatus();
 });
 
@@ -118,6 +171,7 @@ undoBtn.addEventListener('click', () => {
     if (aiThinking) return;
     controller.undoLastMove();
     updateStatus();
+    updateMoveHistory();
 });
 
 gameOverNewGameBtn.addEventListener('click', () => {
@@ -133,5 +187,7 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Start initial game
+// Start default game and show setup dialog on initial load
 controller.startNewGame();
+showNewGameDialog();
+statusEl.textContent = '请选择游戏设置';

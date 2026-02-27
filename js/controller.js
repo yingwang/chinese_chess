@@ -78,6 +78,7 @@ class GameController {
     if (!matched) return false;
 
     this.board = this.board.makeMove(matched);
+    this.board.currentPlayer = PieceColor.opposite(this.board.currentPlayer);
     this.moveHistory.push(matched);
 
     if (this.onMoveCompleted) this.onMoveCompleted(matched);
@@ -105,6 +106,7 @@ class GameController {
       }
 
       this.board = this.board.makeMove(move);
+      this.board.currentPlayer = PieceColor.opposite(this.board.currentPlayer);
       this.moveHistory.push(move);
 
       if (this.onMoveCompleted) this.onMoveCompleted(move);
@@ -131,6 +133,7 @@ class GameController {
     this.board = Board.createInitialBoard();
     for (const move of this.moveHistory) {
       this.board = this.board.makeMove(move);
+      this.board.currentPlayer = PieceColor.opposite(this.board.currentPlayer);
     }
 
     this.gameOver = false;

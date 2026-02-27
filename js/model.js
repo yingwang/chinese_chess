@@ -16,32 +16,32 @@ export const PieceType = {
   },
   ADVISOR: {
     chineseName: '士/仕',
-    baseValue: 20,
+    baseValue: 120,
     getDisplayName(color) { return color === PieceColor.RED ? '仕' : '士'; }
   },
   ELEPHANT: {
     chineseName: '象/相',
-    baseValue: 25,
+    baseValue: 120,
     getDisplayName(color) { return color === PieceColor.RED ? '相' : '象'; }
   },
   HORSE: {
     chineseName: '馬',
-    baseValue: 45,
+    baseValue: 400,
     getDisplayName(color) { return '馬'; }
   },
   CHARIOT: {
     chineseName: '車',
-    baseValue: 90,
+    baseValue: 900,
     getDisplayName(color) { return '車'; }
   },
   CANNON: {
     chineseName: '砲',
-    baseValue: 45,
+    baseValue: 450,
     getDisplayName(color) { return '砲'; }
   },
   SOLDIER: {
     chineseName: '兵/卒',
-    baseValue: 10,
+    baseValue: 100,
     getDisplayName(color) { return color === PieceColor.RED ? '兵' : '卒'; }
   }
 };

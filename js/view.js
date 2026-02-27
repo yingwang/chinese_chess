@@ -45,14 +45,17 @@ export class BoardView {
   resize() {
     const container = this.canvas.parentElement;
     const w = container.clientWidth;
-    const h = container.clientHeight || w * (11 / 10);
-    this.canvas.width = w * devicePixelRatio;
-    this.canvas.height = h * devicePixelRatio;
+    const h = container.clientHeight || Math.round(w * 10 / 9);
+    const dpr = window.devicePixelRatio || 1;
+    this.canvas.width = w * dpr;
+    this.canvas.height = h * dpr;
     this.canvas.style.width = w + 'px';
     this.canvas.style.height = h + 'px';
-    this.ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    this.cellSize = Math.min(w / 10, h / 11);
+    // Calculate cell size with padding for pieces at edges
+    const padFactor = 1.1; // extra space around the board for pieces
+    this.cellSize = Math.min(w / (8 + padFactor * 2), h / (9 + padFactor * 2));
     this.offsetX = (w - this.cellSize * 8) / 2;
     this.offsetY = (h - this.cellSize * 9) / 2;
     this.draw();
@@ -134,9 +137,23 @@ export class BoardView {
     const w = this.canvas.width / devicePixelRatio;
     const h = this.canvas.height / devicePixelRatio;
 
-    // Background
-    ctx.fillStyle = 'rgb(205, 170, 125)';
+    // Clear with dark background
+    ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, w, h);
+
+    // Board background (only the board area)
+    const topLeft = this._toPixel(0, 0);
+    const bottomRight = this._toPixel(9, 8);
+    const pad = this.cellSize * 0.5;
+    ctx.fillStyle = 'rgb(205, 170, 125)';
+    ctx.beginPath();
+    ctx.roundRect(
+      topLeft.x - pad, topLeft.y - pad,
+      bottomRight.x - topLeft.x + pad * 2,
+      bottomRight.y - topLeft.y + pad * 2,
+      8
+    );
+    ctx.fill();
 
     this._drawGrid();
     this._drawRiver();
@@ -226,7 +243,7 @@ export class BoardView {
     const midY = (y4 + y5) / 2;
 
     ctx.fillStyle = 'rgb(100, 70, 50)';
-    ctx.font = `bold ${this.cellSize * 0.45}px serif`;
+    ctx.font = `bold ${this.cellSize * 0.45}px "Noto Sans CJK SC", "Noto Serif SC", "Microsoft YaHei", "PingFang SC", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -379,7 +396,7 @@ export class BoardView {
     // Chinese character
     const displayName = piece.type.getDisplayName(piece.color);
     ctx.fillStyle = piece.color === PieceColor.RED ? 'rgb(200, 40, 40)' : 'rgb(30, 30, 30)';
-    ctx.font = `bold ${r * 1.1}px serif`;
+    ctx.font = `bold ${r * 1.1}px "Noto Sans CJK SC", "Noto Serif SC", "Microsoft YaHei", "PingFang SC", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(displayName, x, y + 1);

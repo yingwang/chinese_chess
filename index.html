@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>中国象棋 - Chinese Chess</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #1a1a2e;
+            font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            color: #fff;
+            overflow-x: hidden;
+        }
+        #app {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+        }
+        #header {
+            text-align: center;
+            padding: 8px 0;
+            width: 100%;
+        }
+        #header h1 {
+            color: #ffd700;
+            font-size: 1.6em;
+            margin-bottom: 4px;
+        }
+        #status {
+            color: #eee;
+            font-size: 1em;
+            min-height: 1.4em;
+        }
+        #game-container {
+            width: 100%;
+            position: relative;
+        }
+        #board-canvas {
+            display: block;
+            width: 100%;
+            touch-action: none;
+        }
+        #controls {
+            display: flex;
+            gap: 12px;
+            padding: 10px 0;
+            width: 100%;
+            justify-content: center;
+        }
+        #controls button {
+            background: #16213e;
+            color: #ffd700;
+            border: 1px solid #ffd70055;
+            border-radius: 8px;
+            padding: 10px 24px;
+            font-size: 1em;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.2s;
+        }
+        #controls button:hover {
+            background: #1a2a50;
+        }
+        #controls button:active {
+            background: #0f1a30;
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal.hidden {
+            display: none;
+        }
+        .modal-content {
+            background: #16213e;
+            border: 1px solid #ffd70044;
+            border-radius: 12px;
+            padding: 24px;
+            min-width: 280px;
+            max-width: 90vw;
+            text-align: center;
+        }
+        .modal-content h2 {
+            color: #ffd700;
+            margin-bottom: 16px;
+            font-size: 1.3em;
+        }
+        .modal-content p {
+            margin-bottom: 16px;
+            color: #ccc;
+        }
+        .setting {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 12px;
+        }
+        .setting label {
+            color: #ccc;
+            font-size: 0.95em;
+            white-space: nowrap;
+        }
+        .setting select {
+            background: #0f1a30;
+            color: #eee;
+            border: 1px solid #ffd70033;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 0.95em;
+            font-family: inherit;
+            flex: 1;
+        }
+        .dialog-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 18px;
+        }
+        .dialog-buttons button,
+        .modal-content > button {
+            background: #1a2a50;
+            color: #ffd700;
+            border: 1px solid #ffd70055;
+            border-radius: 8px;
+            padding: 8px 22px;
+            font-size: 1em;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.2s;
+        }
+        .dialog-buttons button:hover,
+        .modal-content > button:hover {
+            background: #243560;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="header">
+            <h1>中国象棋</h1>
+            <div id="status">红方走棋</div>
+        </div>
+        <div id="game-container">
+            <canvas id="board-canvas"></canvas>
+        </div>
+        <div id="controls">
+            <button id="new-game-btn">新游戏</button>
+            <button id="undo-btn">悔棋</button>
+        </div>
+    </div>
+
+    <!-- New Game Dialog -->
+    <div id="new-game-dialog" class="modal hidden">
+        <div class="modal-content">
+            <h2>新游戏</h2>
+            <div class="setting">
+                <label>游戏模式:</label>
+                <select id="game-mode-select">
+                    <option value="PLAYER_VS_AI">人机对战</option>
+                    <option value="PLAYER_VS_PLAYER">双人对战</option>
+                    <option value="AI_VS_AI">电脑对战</option>
+                </select>
+            </div>
+            <div class="setting" id="difficulty-setting">
+                <label>难度:</label>
+                <select id="difficulty-select">
+                    <option value="BEGINNER">初级</option>
+                    <option value="INTERMEDIATE">中级</option>
+                    <option value="ADVANCED">高级</option>
+                    <option value="PROFESSIONAL" selected>专业</option>
+                    <option value="MASTER">大师</option>
+                </select>
+            </div>
+            <div class="setting" id="color-setting">
+                <label>执棋:</label>
+                <select id="color-select">
+                    <option value="RED">红方 (先手)</option>
+                    <option value="BLACK">黑方 (后手)</option>
+                </select>
+            </div>
+            <div class="dialog-buttons">
+                <button id="start-game-btn">开始</button>
+                <button id="cancel-btn">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Dialog -->
+    <div id="game-over-dialog" class="modal hidden">
+        <div class="modal-content">
+            <h2 id="game-over-title"></h2>
+            <p id="game-over-message"></p>
+            <button id="game-over-new-game-btn">新游戏</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

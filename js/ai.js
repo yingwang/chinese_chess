@@ -113,29 +113,20 @@ export const Evaluator = {
     if (!redGeneral) return -this.CHECKMATE_SCORE;
     if (!blackGeneral) return this.CHECKMATE_SCORE;
 
-    if (board.currentPlayer === PieceColor.RED && board.isCheckmate()) {
-      return -this.CHECKMATE_SCORE;
-    }
-    if (board.currentPlayer === PieceColor.BLACK && board.isCheckmate()) {
-      return this.CHECKMATE_SCORE;
+    // Only do expensive checkmate check when in check (rare)
+    const currentPlayerInCheck = board.isInCheck(board.currentPlayer);
+    if (currentPlayerInCheck && board.getAllLegalMoves().length === 0) {
+      return board.currentPlayer === PieceColor.RED ? -this.CHECKMATE_SCORE : this.CHECKMATE_SCORE;
     }
 
     let score = 0;
-    let redMobility = 0;
-    let blackMobility = 0;
 
     for (const piece of board.getAllPieces()) {
       const baseValue = piece.type.baseValue;
       const positionalValue = this._getPositionalValue(piece);
       const pieceScore = baseValue + positionalValue;
 
-      if (piece.color === PieceColor.RED) {
-        score += pieceScore;
-        redMobility += piece.getLegalMoves(board).length;
-      } else {
-        score -= pieceScore;
-        blackMobility += piece.getLegalMoves(board).length;
-      }
+      score += piece.color === PieceColor.RED ? pieceScore : -pieceScore;
 
       // Center control bonus (cols 3-5)
       const col = piece.position.col;
@@ -150,12 +141,12 @@ export const Evaluator = {
       }
     }
 
-    // Mobility bonus
-    score += (redMobility - blackMobility) * 2;
-
-    // Check bonus
-    if (board.isInCheck(PieceColor.BLACK)) score += 50;
-    if (board.isInCheck(PieceColor.RED)) score -= 50;
+    // Check bonus (at most one side can be in check)
+    if (currentPlayerInCheck) {
+      score += board.currentPlayer === PieceColor.RED ? -50 : 50;
+    } else if (board.isInCheck(PieceColor.opposite(board.currentPlayer))) {
+      score += board.currentPlayer === PieceColor.RED ? 50 : -50;
+    }
 
     return score;
   }
@@ -244,6 +235,38 @@ export class ChessAI {
     this.nodesSearched = 0;
     this.searchStartTime = 0;
     this.timeUp = false;
+    this.killerMoves = [];
+    this.historyTable = new Map();
+  }
+
+  _storeKillerMove(ply, move) {
+    if (!this.killerMoves[ply]) this.killerMoves[ply] = [null, null];
+    const km = this.killerMoves[ply];
+    if (km[0] && move.from.equals(km[0].from) && move.to.equals(km[0].to)) return;
+    km[1] = km[0];
+    km[0] = move;
+  }
+
+  _isKillerMove(ply, move) {
+    const km = this.killerMoves[ply];
+    if (!km) return false;
+    for (const k of km) {
+      if (k && move.from.equals(k.from) && move.to.equals(k.to)) return true;
+    }
+    return false;
+  }
+
+  _historyKey(move) {
+    return `${move.piece.color}:${move.piece.type.chineseName}:${move.to.row},${move.to.col}`;
+  }
+
+  _updateHistory(move, depth) {
+    const key = this._historyKey(move);
+    this.historyTable.set(key, (this.historyTable.get(key) || 0) + depth * depth);
+  }
+
+  _getHistoryScore(move) {
+    return this.historyTable.get(this._historyKey(move)) || 0;
   }
 
   findBestMove(board, moveHistory = []) {
@@ -264,6 +287,8 @@ export class ChessAI {
       this.nodesSearched = 0;
       this.searchStartTime = Date.now();
       this.timeUp = false;
+      this.killerMoves = [];
+      this.historyTable.clear();
 
       const legalMoves = board.getAllLegalMoves();
       if (legalMoves.length === 0) {
@@ -285,7 +310,7 @@ export class ChessAI {
           return;
         }
 
-        const orderedMoves = this._orderMoves(board, legalMoves);
+        const orderedMoves = this._orderMoves(board, legalMoves, 0);
         let bestScore = maximizing ? -Infinity : Infinity;
         let depthBestMove = orderedMoves[0];
         let moveIndex = 0;
@@ -343,7 +368,7 @@ export class ChessAI {
     });
   }
 
-  _alphaBeta(board, depth, alpha, beta, maximizing) {
+  _alphaBeta(board, depth, alpha, beta, maximizing, isNullMove = false, ply = 0) {
     this.nodesSearched++;
 
     // Time check every 1000 nodes
@@ -370,17 +395,30 @@ export class ChessAI {
       return this._quiescenceSearch(board, this.quiescenceDepth, alpha, beta, maximizing);
     }
 
+    const inCheck = board.isInCheck(board.currentPlayer);
+
+    // Null Move Pruning: skip our turn and see if opponent can still beat us
+    if (!isNullMove && !inCheck && depth >= 3) {
+      const nullBoard = board.copy();
+      nullBoard.currentPlayer = PieceColor.opposite(board.currentPlayer);
+      const R = depth >= 6 ? 3 : 2;
+      const nullScore = this._alphaBeta(nullBoard, depth - 1 - R, alpha, beta, !maximizing, true, ply + 1);
+      if (this.timeUp) return 0;
+      if (maximizing && nullScore >= beta) return beta;
+      if (!maximizing && nullScore <= alpha) return alpha;
+    }
+
     const legalMoves = board.getAllLegalMoves();
 
     if (legalMoves.length === 0) {
-      if (board.isInCheck(board.currentPlayer)) {
-        return maximizing ? -Evaluator.CHECKMATE_SCORE + (this.maxDepth - depth)
-                          : Evaluator.CHECKMATE_SCORE - (this.maxDepth - depth);
+      if (inCheck) {
+        return maximizing ? -Evaluator.CHECKMATE_SCORE + ply
+                          : Evaluator.CHECKMATE_SCORE - ply;
       }
       return 0; // Stalemate
     }
 
-    const orderedMoves = this._orderMoves(board, legalMoves);
+    const orderedMoves = this._orderMoves(board, legalMoves, ply);
     let bestMove = orderedMoves[0];
     let bestScore;
     let ttType;
@@ -389,31 +427,87 @@ export class ChessAI {
 
     if (maximizing) {
       bestScore = -Infinity;
-      for (const move of orderedMoves) {
+      for (let i = 0; i < orderedMoves.length; i++) {
+        const move = orderedMoves[i];
         const newBoard = board.makeMove(move);
         newBoard.currentPlayer = PieceColor.opposite(board.currentPlayer);
-        const score = this._alphaBeta(newBoard, depth - 1, alpha, beta, false);
+
+        let score;
+        const isQuiet = !move.isCapture();
+
+        if (i === 0) {
+          score = this._alphaBeta(newBoard, depth - 1, alpha, beta, false, false, ply + 1);
+        } else {
+          // Late Move Reductions for quiet non-killer late moves
+          let reduction = 0;
+          if (i >= 3 && depth >= 3 && isQuiet && !inCheck && !this._isKillerMove(ply, move)) {
+            reduction = 1;
+          }
+
+          // PVS: null window search
+          score = this._alphaBeta(newBoard, depth - 1 - reduction, alpha, alpha + 1, false, false, ply + 1);
+
+          // Re-search with full window if needed
+          if (score > alpha && (score < beta || reduction > 0)) {
+            score = this._alphaBeta(newBoard, depth - 1, alpha, beta, false, false, ply + 1);
+          }
+        }
+
         if (this.timeUp) return 0;
         if (score > bestScore) {
           bestScore = score;
           bestMove = move;
         }
         alpha = Math.max(alpha, score);
-        if (alpha >= beta) break;
+        if (alpha >= beta) {
+          if (isQuiet) {
+            this._storeKillerMove(ply, move);
+            this._updateHistory(move, depth);
+          }
+          break;
+        }
       }
     } else {
       bestScore = Infinity;
-      for (const move of orderedMoves) {
+      for (let i = 0; i < orderedMoves.length; i++) {
+        const move = orderedMoves[i];
         const newBoard = board.makeMove(move);
         newBoard.currentPlayer = PieceColor.opposite(board.currentPlayer);
-        const score = this._alphaBeta(newBoard, depth - 1, alpha, beta, true);
+
+        let score;
+        const isQuiet = !move.isCapture();
+
+        if (i === 0) {
+          score = this._alphaBeta(newBoard, depth - 1, alpha, beta, true, false, ply + 1);
+        } else {
+          // Late Move Reductions for quiet non-killer late moves
+          let reduction = 0;
+          if (i >= 3 && depth >= 3 && isQuiet && !inCheck && !this._isKillerMove(ply, move)) {
+            reduction = 1;
+          }
+
+          // PVS: null window search
+          score = this._alphaBeta(newBoard, depth - 1 - reduction, beta - 1, beta, true, false, ply + 1);
+
+          // Re-search with full window if needed
+          if (score < beta && (score > alpha || reduction > 0)) {
+            score = this._alphaBeta(newBoard, depth - 1, alpha, beta, true, false, ply + 1);
+          }
+        }
+
         if (this.timeUp) return 0;
         if (score < bestScore) {
           bestScore = score;
           bestMove = move;
         }
         beta = Math.min(beta, score);
-        if (alpha >= beta) break;
+        if (alpha >= beta) {
+          if (isQuiet) {
+            this._storeKillerMove(ply, move);
+            this._updateHistory(move, depth);
+          }
+          break;
+        }
       }
     }
 
@@ -442,8 +536,7 @@ export class ChessAI {
       if (standPat < beta) beta = standPat;
     }
 
-    const legalMoves = board.getAllLegalMoves();
-    const captures = legalMoves.filter(m => m.isCapture());
+    const captures = board.getLegalCaptureMoves();
 
     if (captures.length === 0) return standPat;
 
@@ -477,17 +570,17 @@ export class ChessAI {
     }
   }
 
-  _orderMoves(board, moves) {
+  _orderMoves(board, moves, ply) {
     const hash = board.getPositionHash();
     const ttEntry = this.transpositionTable.probe(hash);
     const ttMove = ttEntry ? ttEntry.bestMove : null;
 
     return moves.slice().sort((a, b) => {
-      return this._moveScore(b, ttMove) - this._moveScore(a, ttMove);
+      return this._moveScore(b, ttMove, ply) - this._moveScore(a, ttMove, ply);
     });
   }
 
-  _moveScore(move, ttMove) {
+  _moveScore(move, ttMove, ply) {
     let score = 0;
 
     // TT move gets highest priority
@@ -499,6 +592,14 @@ export class ChessAI {
     if (move.isCapture()) {
       score += 10000 + (move.capturedPiece.type.baseValue * 10) - move.piece.type.baseValue;
     }
+
+    // Killer moves
+    if (this._isKillerMove(ply, move)) {
+      score += 9000;
+    }
+
+    // History heuristic
+    score += Math.min(this._getHistoryScore(move), 8000);
 
     // Center control (cols 3-5)
     if (move.to.col >= 3 && move.to.col <= 5) {
@@ -517,6 +618,8 @@ export class ChessAI {
 
   clearCache() {
     this.transpositionTable.clear();
+    this.killerMoves = [];
+    this.historyTable.clear();
   }
 
   getCacheSize() {

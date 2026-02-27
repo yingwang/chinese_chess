@@ -440,6 +440,21 @@ export class Board {
     return allMoves;
   }
 
+  getLegalCaptureMoves() {
+    const captures = [];
+    for (const piece of this.getPiecesByColor(this.currentPlayer)) {
+      const rawMoves = piece.getLegalMoves(this);
+      for (const move of rawMoves) {
+        if (!move.isCapture()) continue;
+        const newBoard = this.makeMove(move);
+        if (!newBoard.isInCheck(this.currentPlayer) && !newBoard.isGeneralsFacing()) {
+          captures.push(move);
+        }
+      }
+    }
+    return captures;
+  }
+
   isCheckmate() {
     return this.isInCheck(this.currentPlayer) && this.getAllLegalMoves().length === 0;
   }

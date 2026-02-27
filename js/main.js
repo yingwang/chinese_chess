@@ -1,4 +1,4 @@
-import { PieceColor } from './model.js';
+import { PieceColor, PieceType } from './model.js';
 import { GameController, AI_DIFFICULTY, GAME_MODE } from './controller.js';
 import { BoardView } from './view.js';
 
@@ -96,20 +96,62 @@ function updateTimer() {
     elapsedTimeEl.textContent = minutes + ':' + seconds;
 }
 
+// Chinese chess notation
+const CHINESE_NUMERALS = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+
+function toChineseNotation(move) {
+    const piece = move.piece;
+    const from = move.from;
+    const to = move.to;
+    const isRed = piece.color === PieceColor.RED;
+
+    const pieceName = piece.type.getDisplayName(piece.color);
+
+    // Column numbers from player's perspective (right to left)
+    // Red: col 0 = 九, col 8 = 一 → number = 9 - col
+    // Black: col 0 = 1, col 8 = 9 → number = col + 1
+    const fromCol = isRed ? 9 - from.col : from.col + 1;
+    const toCol = isRed ? 9 - to.col : to.col + 1;
+
+    const formatNum = (n) => isRed ? CHINESE_NUMERALS[n] : String(n);
+
+    let direction, lastNum;
+    if (from.row === to.row) {
+        // Horizontal move
+        direction = '平';
+        lastNum = formatNum(toCol);
+    } else {
+        // Advancing: Red moves up (row decreases), Black moves down (row increases)
+        const isAdvancing = isRed ? (to.row < from.row) : (to.row > from.row);
+        direction = isAdvancing ? '进' : '退';
+
+        // Diagonal pieces (Horse, Elephant, Advisor): use destination column
+        // Straight-line pieces (General, Chariot, Cannon, Soldier): use step count
+        const isDiagonal = (piece.type === PieceType.HORSE ||
+                            piece.type === PieceType.ELEPHANT ||
+                            piece.type === PieceType.ADVISOR);
+        if (isDiagonal) {
+            lastNum = formatNum(toCol);
+        } else {
+            lastNum = formatNum(Math.abs(to.row - from.row));
+        }
+    }
+
+    return `${pieceName}${formatNum(fromCol)}${direction}${lastNum}`;
+}
+
 // Move history
 function updateMoveHistory() {
     const history = controller.getMoveHistory();
     moveHistoryEl.innerHTML = '';
     for (let i = 0; i < history.length; i++) {
         const move = history[i];
-        const pieceName = move.piece.type.getDisplayName(move.piece.color);
         const colorClass = move.piece.color === PieceColor.RED ? 'red' : 'black';
-        const capture = move.isCapture() ? '吃' : '→';
         const moveNum = Math.floor(i / 2) + 1;
         const prefix = (i % 2 === 0) ? moveNum + '. ' : '';
         const span = document.createElement('span');
         span.className = 'move-entry ' + colorClass;
-        span.textContent = `${prefix}${pieceName}(${move.from})${capture}(${move.to}) `;
+        span.textContent = `${prefix}${toChineseNotation(move)} `;
         moveHistoryEl.appendChild(span);
     }
     moveHistoryEl.scrollTop = moveHistoryEl.scrollHeight;

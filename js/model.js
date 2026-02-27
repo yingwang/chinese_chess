@@ -199,8 +199,8 @@ export class Piece {
     const steps = [
       [-2, -1, -1, 0], [-2, 1, -1, 0],
       [2, -1, 1, 0],   [2, 1, 1, 0],
-      [-1, -2, 0, -1],  [-1, 2, 0, 1],
-      [1, -2, 0, -1],   [1, 2, 0, 1]
+      [-1, -2, 0, -1], [-1, 2, 0, 1],
+      [1, -2, 0, -1],  [1, 2, 0, 1]
     ];
 
     for (const [dr, dc, br, bc] of steps) {
@@ -481,7 +481,7 @@ export class Board {
   getPositionHash() {
     const entries = [];
     for (const [key, piece] of this.pieces) {
-      entries.push(`${key}:${piece.color}:${piece.type.baseValue}`);
+      entries.push(`${key}:${piece.color}:${piece.type.chineseName}`);
     }
     entries.sort();
     return entries.join('|') + '|' + this.currentPlayer;

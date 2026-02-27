@@ -466,10 +466,10 @@ export class ChessAI {
         return;
       }
 
+      const maximizing = board.currentPlayer === PieceColor.RED;
       let bestMove = legalMoves[0];
       let bestScore = maximizing ? -Infinity : Infinity;
       let currentDepth = 1;
-      const maximizing = board.currentPlayer === PieceColor.RED;
 
       const iterateDepth = () => {
         if (currentDepth > this.maxDepth || this.timeUp) {

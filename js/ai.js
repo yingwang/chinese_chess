@@ -95,8 +95,8 @@ PIECE_SQUARE_TABLES.set(PieceType.SOLDIER, [
   [0,0,0,0,0,0,0,0,0]
 ]);
 
-// Total material used for game phase detection
-const TOTAL_START_MATERIAL = 900 * 2 + 450 * 2 + 400 * 2 + 120 * 2 + 120 * 2 + 100 * 5; // per side = 3680
+// Total non-general material for both sides, used for game phase detection
+const TOTAL_START_MATERIAL = (900 * 2 + 450 * 2 + 400 * 2 + 120 * 2 + 120 * 2 + 100 * 5) * 2;
 
 export const Evaluator = {
   CHECKMATE_SCORE: 100000,
@@ -467,7 +467,7 @@ export class ChessAI {
       }
 
       let bestMove = legalMoves[0];
-      let bestScore = 0;
+      let bestScore = maximizing ? -Infinity : Infinity;
       let currentDepth = 1;
       const maximizing = board.currentPlayer === PieceColor.RED;
 
@@ -484,7 +484,7 @@ export class ChessAI {
 
         // Aspiration windows: use narrow window around previous best score
         let alpha, beta;
-        if (currentDepth >= 3 && bestScore !== 0) {
+        if (currentDepth >= 3 && isFinite(bestScore)) {
           const ASPIRATION_WINDOW = 50;
           alpha = bestScore - ASPIRATION_WINDOW;
           beta = bestScore + ASPIRATION_WINDOW;
@@ -499,7 +499,7 @@ export class ChessAI {
           if (moveIndex >= orderedMoves.length || this.timeUp) {
             if (!this.timeUp) {
               // If aspiration window failed, re-search with full window
-              if (currentDepth >= 3 && bestScore !== 0 &&
+              if (currentDepth >= 3 && isFinite(bestScore) &&
                   (depthBestScore <= aspirationAlpha || depthBestScore >= aspirationBeta)) {
                 // Re-search with full window
                 depthBestScore = maximizing ? -Infinity : Infinity;
@@ -683,8 +683,7 @@ export class ChessAI {
           if (i >= 3 && effectiveDepth >= 3 && isQuiet && !inCheck && !this._isKillerMove(ply, move)) {
             reduction = 1;
             if (i >= 6) reduction = 2;
-            // Don't reduce too much
-            reduction = Math.min(reduction, effectiveDepth - 2);
+            reduction = Math.min(reduction, effectiveDepth - 1);
           }
 
           // PVS: null window search
@@ -734,7 +733,7 @@ export class ChessAI {
           if (i >= 3 && effectiveDepth >= 3 && isQuiet && !inCheck && !this._isKillerMove(ply, move)) {
             reduction = 1;
             if (i >= 6) reduction = 2;
-            reduction = Math.min(reduction, effectiveDepth - 2);
+            reduction = Math.min(reduction, effectiveDepth - 1);
           }
 
           // PVS: null window search

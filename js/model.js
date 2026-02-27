@@ -35,9 +35,9 @@ export const PieceType = {
     getDisplayName(color) { return '車'; }
   },
   CANNON: {
-    chineseName: '砲',
+    chineseName: '炮',
     baseValue: 450,
-    getDisplayName(color) { return '砲'; }
+    getDisplayName(color) { return '炮'; }
   },
   SOLDIER: {
     chineseName: '兵/卒',

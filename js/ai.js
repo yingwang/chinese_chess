@@ -384,10 +384,11 @@ export class ChessAI {
     let bestMove = orderedMoves[0];
     let bestScore;
     let ttType;
+    const alphaOrig = alpha;
+    const betaOrig = beta;
 
     if (maximizing) {
       bestScore = -Infinity;
-      ttType = TranspositionTable.UPPER_BOUND;
       for (const move of orderedMoves) {
         const newBoard = board.makeMove(move);
         newBoard.currentPlayer = PieceColor.opposite(board.currentPlayer);
@@ -398,14 +399,10 @@ export class ChessAI {
           bestMove = move;
         }
         alpha = Math.max(alpha, score);
-        if (alpha >= beta) {
-          ttType = TranspositionTable.LOWER_BOUND;
-          break;
-        }
+        if (alpha >= beta) break;
       }
     } else {
       bestScore = Infinity;
-      ttType = TranspositionTable.UPPER_BOUND;
       for (const move of orderedMoves) {
         const newBoard = board.makeMove(move);
         newBoard.currentPlayer = PieceColor.opposite(board.currentPlayer);
@@ -416,14 +413,15 @@ export class ChessAI {
           bestMove = move;
         }
         beta = Math.min(beta, score);
-        if (alpha >= beta) {
-          ttType = TranspositionTable.LOWER_BOUND;
-          break;
-        }
+        if (alpha >= beta) break;
       }
     }
 
-    if (bestScore > alpha && bestScore < beta) {
+    if (bestScore <= alphaOrig) {
+      ttType = TranspositionTable.UPPER_BOUND;
+    } else if (bestScore >= betaOrig) {
+      ttType = TranspositionTable.LOWER_BOUND;
+    } else {
       ttType = TranspositionTable.EXACT;
     }
 

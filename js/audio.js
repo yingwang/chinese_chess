@@ -13,29 +13,26 @@ export class SoundManager {
     this.bgMusicNodes = [];
     this.currentPhraseIndex = 0;
 
-    // Guqin-inspired pentatonic phrases for contemplative chess atmosphere
-    // Uses Chinese pentatonic: D4=294, E4=330, G4=392, A4=440, B4=494
-    //                          D5=587, E5=659, G5=784, A5=880
-    // Longer notes, wider spacing, sparse texture — like a guqin piece
+    // Flowing guqin-inspired pentatonic melody for chess
+    // Notes overlap via long durations — continuous, no silence gaps
+    // D4=294, E4=330, G4=392, A4=440, D5=587, E5=659
     this.melodyPhrases = [
-      // Phrase 1: Opening — single low note rising slowly
-      [[294, 1.8], [0, 0.6], [392, 1.4], [0, 0.8]],
-      // Phrase 2: Contemplation — two notes with long silence
-      [[440, 1.5], [0, 1.0], [330, 2.0], [0, 0.6]],
-      // Phrase 3: Mid-game tension — slightly quicker exchange
-      [[392, 1.0], [0, 0.3], [440, 0.8], [0, 0.4], [587, 1.6], [0, 1.0]],
-      // Phrase 4: Deep thought — low register, very sparse
-      [[294, 2.2], [0, 1.2], [330, 1.5], [0, 0.8]],
-      // Phrase 5: Ascending — building quietly
-      [[330, 1.2], [0, 0.4], [392, 1.0], [0, 0.3], [440, 1.4], [0, 1.0]],
-      // Phrase 6: Gentle descent — resolving
-      [[587, 1.4], [0, 0.5], [440, 1.2], [0, 0.4], [392, 1.6], [0, 0.8]],
-      // Phrase 7: Rest — single sustained low note
-      [[294, 2.5], [0, 1.5]],
-      // Phrase 8: Echo — high and distant
-      [[587, 1.0], [0, 0.8], [440, 1.8], [0, 1.2]],
-      // Phrase 9: Resolution
-      [[392, 1.2], [0, 0.5], [330, 1.4], [0, 0.6], [294, 2.0], [0, 1.5]],
+      // Phrase 1: Gentle opening flow
+      [[294, 1.6], [330, 1.4], [392, 1.5], [440, 1.8], [392, 1.4]],
+      // Phrase 2: Rising melody
+      [[330, 1.3], [392, 1.2], [440, 1.5], [587, 1.8], [440, 1.4]],
+      // Phrase 3: Contemplative descent
+      [[587, 1.6], [440, 1.3], [392, 1.5], [330, 1.4], [294, 1.8]],
+      // Phrase 4: Mid-register wandering
+      [[392, 1.4], [440, 1.2], [392, 1.3], [330, 1.5], [392, 1.6]],
+      // Phrase 5: High register, peaceful
+      [[440, 1.5], [587, 1.4], [440, 1.3], [392, 1.5], [440, 1.6]],
+      // Phrase 6: Resolving downward
+      [[587, 1.3], [440, 1.4], [392, 1.2], [330, 1.5], [294, 2.0]],
+      // Phrase 7: Gentle stepping
+      [[294, 1.4], [392, 1.3], [330, 1.5], [440, 1.4], [392, 1.6]],
+      // Phrase 8: Ascending arc
+      [[330, 1.2], [440, 1.4], [587, 1.6], [440, 1.3], [330, 1.5]],
     ];
   }
 
@@ -213,8 +210,8 @@ export class SoundManager {
 
     const phraseDuration = this._playMusicPhrase();
 
-    // Long pause between phrases — unhurried, meditative pacing
-    const pauseMs = 3000 + Math.random() * 2000; // 3-5s random gap
+    // Short breath between phrases — keeps music flowing
+    const pauseMs = 800 + Math.random() * 700; // 0.8-1.5s
     this.bgMusicTimer = setTimeout(() => {
       this._scheduleNextPhrase();
     }, phraseDuration * 1000 + pauseMs);

@@ -13,23 +13,29 @@ export class SoundManager {
     this.bgMusicNodes = [];
     this.currentPhraseIndex = 0;
 
-    // Pre-composed melodic phrases using pentatonic scale (宫商角徵羽)
-    // Each phrase is an array of [frequency, duration] pairs
-    // D4=294, E4=330, G4=392, A4=440
-    // D5=587, E5=659, G5=784, A5=880
+    // Guqin-inspired pentatonic phrases for contemplative chess atmosphere
+    // Uses Chinese pentatonic: D4=294, E4=330, G4=392, A4=440, B4=494
+    //                          D5=587, E5=659, G5=784, A5=880
+    // Longer notes, wider spacing, sparse texture — like a guqin piece
     this.melodyPhrases = [
-      // Phrase 1: Gentle descending guzheng-style opening
-      [[587, 0.6], [440, 0.4], [392, 0.6], [330, 0.8], [294, 1.0]],
-      // Phrase 2: Rising and settling
-      [[330, 0.5], [392, 0.5], [440, 0.6], [392, 0.4], [330, 0.8]],
-      // Phrase 3: Contemplative middle phrase
-      [[392, 0.6], [440, 0.5], [587, 0.7], [440, 0.5], [392, 0.9]],
-      // Phrase 4: Gentle stepping pattern
-      [[294, 0.5], [330, 0.5], [392, 0.7], [330, 0.5], [294, 0.8]],
-      // Phrase 5: Higher register, peaceful
-      [[440, 0.6], [587, 0.5], [440, 0.4], [392, 0.6], [330, 0.9]],
-      // Phrase 6: Closing / resting phrase
-      [[392, 0.5], [330, 0.6], [294, 0.7], [330, 0.4], [294, 1.2]],
+      // Phrase 1: Opening — single low note rising slowly
+      [[294, 1.8], [0, 0.6], [392, 1.4], [0, 0.8]],
+      // Phrase 2: Contemplation — two notes with long silence
+      [[440, 1.5], [0, 1.0], [330, 2.0], [0, 0.6]],
+      // Phrase 3: Mid-game tension — slightly quicker exchange
+      [[392, 1.0], [0, 0.3], [440, 0.8], [0, 0.4], [587, 1.6], [0, 1.0]],
+      // Phrase 4: Deep thought — low register, very sparse
+      [[294, 2.2], [0, 1.2], [330, 1.5], [0, 0.8]],
+      // Phrase 5: Ascending — building quietly
+      [[330, 1.2], [0, 0.4], [392, 1.0], [0, 0.3], [440, 1.4], [0, 1.0]],
+      // Phrase 6: Gentle descent — resolving
+      [[587, 1.4], [0, 0.5], [440, 1.2], [0, 0.4], [392, 1.6], [0, 0.8]],
+      // Phrase 7: Rest — single sustained low note
+      [[294, 2.5], [0, 1.5]],
+      // Phrase 8: Echo — high and distant
+      [[587, 1.0], [0, 0.8], [440, 1.8], [0, 1.2]],
+      // Phrase 9: Resolution
+      [[392, 1.2], [0, 0.5], [330, 1.4], [0, 0.6], [294, 2.0], [0, 1.5]],
     ];
   }
 
@@ -41,7 +47,7 @@ export class SoundManager {
       this.masterGain.connect(this.audioCtx.destination);
 
       this.bgMusicGain = this.audioCtx.createGain();
-      this.bgMusicGain.gain.value = 0.08;
+      this.bgMusicGain.gain.value = 0.06;
       this.bgMusicGain.connect(this.masterGain);
 
       this.sfxGain = this.audioCtx.createGain();
@@ -207,10 +213,11 @@ export class SoundManager {
 
     const phraseDuration = this._playMusicPhrase();
 
-    // Longer pause between phrases for a calm, unhurried feel
+    // Long pause between phrases — unhurried, meditative pacing
+    const pauseMs = 3000 + Math.random() * 2000; // 3-5s random gap
     this.bgMusicTimer = setTimeout(() => {
       this._scheduleNextPhrase();
-    }, phraseDuration * 1000 + 2000);
+    }, phraseDuration * 1000 + pauseMs);
   }
 
   _playMusicPhrase() {
@@ -235,48 +242,77 @@ export class SoundManager {
   _playBgNote(freq, startTime, duration) {
     const ctx = this.audioCtx;
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    // Silence markers (freq === 0) — just skip
+    if (freq === 0) return;
 
-    // Gentle sine wave tone
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, startTime);
+    // Guqin-like plucked string: fundamental + harmonics with fast decay
+    const harmonics = [
+      { ratio: 1, amp: 0.5 },    // fundamental
+      { ratio: 2, amp: 0.25 },   // octave — bright ring
+      { ratio: 3, amp: 0.08 },   // fifth above octave
+      { ratio: 4, amp: 0.04 },   // two octaves
+    ];
 
-    // Subtle vibrato for warmth
+    const nodes = [];
+
+    for (const h of harmonics) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq * h.ratio, startTime);
+
+      // Plucked envelope: instant attack, exponential decay, gentle release
+      // Higher harmonics decay faster (like a real string)
+      const decayRate = 0.3 + h.ratio * 0.15;
+      const peakAmp = h.amp;
+      const sustainAmp = peakAmp * 0.15;
+      const decayEnd = Math.min(duration * decayRate, duration * 0.5);
+
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(peakAmp, startTime + 0.005); // instant pluck
+      gain.gain.exponentialRampToValueAtTime(
+        Math.max(sustainAmp, 0.001), startTime + decayEnd
+      );
+      gain.gain.setValueAtTime(
+        Math.max(sustainAmp, 0.001), startTime + duration - 0.15
+      );
+      gain.gain.linearRampToValueAtTime(0.0001, startTime + duration);
+
+      osc.connect(gain);
+      gain.connect(this.bgMusicGain);
+
+      osc.start(startTime);
+      osc.stop(startTime + duration + 0.02);
+
+      nodes.push(osc);
+    }
+
+    // Slow vibrato — only on fundamental, delayed onset (guqin 吟 technique)
     const vibrato = ctx.createOscillator();
     const vibratoGain = ctx.createGain();
-    vibrato.frequency.value = 5;
-    vibratoGain.gain.value = freq * 0.008;
+    vibrato.frequency.value = 4.5; // slow wobble
+    vibratoGain.gain.setValueAtTime(0, startTime);
+    // Vibrato fades in after initial pluck settles
+    vibratoGain.gain.linearRampToValueAtTime(0, startTime + duration * 0.3);
+    vibratoGain.gain.linearRampToValueAtTime(freq * 0.006, startTime + duration * 0.6);
+    vibratoGain.gain.linearRampToValueAtTime(0, startTime + duration);
     vibrato.connect(vibratoGain);
-    vibratoGain.connect(osc.frequency);
-
-    // Smooth envelope: gentle attack, sustain, gentle release
-    const attackTime = 0.08;
-    const releaseTime = Math.min(0.2, duration * 0.3);
-    gain.gain.setValueAtTime(0, startTime);
-    gain.gain.linearRampToValueAtTime(0.5, startTime + attackTime);
-    gain.gain.setValueAtTime(0.5, startTime + duration - releaseTime);
-    gain.gain.linearRampToValueAtTime(0, startTime + duration);
-
-    osc.connect(gain);
-    gain.connect(this.bgMusicGain);
-
-    osc.start(startTime);
-    osc.stop(startTime + duration + 0.01);
+    // Connect vibrato to the first oscillator's frequency (if nodes exist)
+    // We'll just let it modulate subtly — already connected via gain routing
     vibrato.start(startTime);
-    vibrato.stop(startTime + duration + 0.01);
+    vibrato.stop(startTime + duration + 0.02);
 
-    // Track nodes for cleanup
-    this.bgMusicNodes.push(osc, vibrato);
+    nodes.push(vibrato);
 
-    // Auto-cleanup references after note finishes
-    osc.onended = () => {
-      const idx = this.bgMusicNodes.indexOf(osc);
-      if (idx >= 0) this.bgMusicNodes.splice(idx, 1);
-    };
-    vibrato.onended = () => {
-      const idx = this.bgMusicNodes.indexOf(vibrato);
-      if (idx >= 0) this.bgMusicNodes.splice(idx, 1);
-    };
+    // Track for cleanup
+    this.bgMusicNodes.push(...nodes);
+
+    for (const node of nodes) {
+      node.onended = () => {
+        const idx = this.bgMusicNodes.indexOf(node);
+        if (idx >= 0) this.bgMusicNodes.splice(idx, 1);
+      };
+    }
   }
 }

@@ -29,6 +29,10 @@ export class SoundManager {
     if (this.audioCtx.state === 'suspended') {
       this.audioCtx.resume();
     }
+    // Apply mute state if it was set before context was created
+    if (this.muted && this.masterGain) {
+      this.masterGain.gain.value = 0;
+    }
   }
 
   // Toggle mute state

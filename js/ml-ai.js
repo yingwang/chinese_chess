@@ -138,6 +138,10 @@ export class MLChessAI {
     this.loading = false;
   }
 
+  isReady() {
+    return this.session !== null;
+  }
+
   async findBestMove(board) {
     if (!this.session) {
       await this.loadModel();

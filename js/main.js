@@ -89,6 +89,12 @@ controller.onGameOver = (result) => {
     showGameOverDialog(result);
 };
 
+controller.onMLFallback = () => {
+    statusEl.textContent = getLang() === 'zh'
+        ? '神经网络不可用，已切换为大师级 AI'
+        : 'Neural network unavailable, using Master AI';
+};
+
 // Status
 function updateStatus() {
     if (controller.gameOver) return;

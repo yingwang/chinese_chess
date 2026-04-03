@@ -43,6 +43,15 @@ class GameController {
     return new ChessAI(difficulty.depth, difficulty.timeLimit, difficulty.quiescenceDepth);
   }
 
+  // Fallback AI when ML model fails to load
+  _fallbackAI() {
+    return new ChessAI(
+      AI_DIFFICULTY.MASTER.depth,
+      AI_DIFFICULTY.MASTER.timeLimit,
+      AI_DIFFICULTY.MASTER.quiescenceDepth
+    );
+  }
+
   setGameMode(mode, aiColor = PieceColor.BLACK) {
     this.gameMode = mode;
     this.aiColor = aiColor;
@@ -106,7 +115,16 @@ class GameController {
     if (this.onAIThinking) this.onAIThinking(true);
 
     try {
-      const move = await this.ai.findBestMove(this.board, this.moveHistory);
+      let move = await this.ai.findBestMove(this.board, this.moveHistory);
+
+      // Fallback: if ML model failed, switch to Master-level Alpha-Beta
+      if (!move && this.ai instanceof MLChessAI) {
+        console.warn('ML model unavailable, falling back to Alpha-Beta AI');
+        this.ai = this._fallbackAI();
+        move = await this.ai.findBestMove(this.board, this.moveHistory);
+        if (this.onMLFallback) this.onMLFallback();
+      }
+
       if (!move) {
         if (this.onAIThinking) this.onAIThinking(false);
         return;

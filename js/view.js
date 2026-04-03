@@ -175,23 +175,37 @@ export class BoardView {
     const w = this.canvas.width / dpr;
     const h = this.canvas.height / dpr;
 
-    // Clear with theme background
-    ctx.fillStyle = this.theme === 'light' ? 'rgba(240,236,228,0.85)' : '#1a1a2e';
+    // Clear
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = this.theme === 'light' ? 'rgba(240,236,228,0.85)' : 'rgba(26,26,46,0.92)';
     ctx.fillRect(0, 0, w, h);
 
-    // Board background (only the board area)
+    // Board background with shadow and rounded border
     const topLeft = this._toPixel(0, 0);
     const bottomRight = this._toPixel(9, 8);
     const pad = this.cellSize * 0.5;
+    const bx = topLeft.x - pad, by = topLeft.y - pad;
+    const bw = bottomRight.x - topLeft.x + pad * 2;
+    const bh = bottomRight.y - topLeft.y + pad * 2;
+
+    // Drop shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 4;
     ctx.fillStyle = 'rgb(205, 170, 125)';
     ctx.beginPath();
-    ctx.roundRect(
-      topLeft.x - pad, topLeft.y - pad,
-      bottomRight.x - topLeft.x + pad * 2,
-      bottomRight.y - topLeft.y + pad * 2,
-      8
-    );
+    ctx.roundRect(bx, by, bw, bh, 10);
     ctx.fill();
+    ctx.restore();
+
+    // Outer border
+    ctx.strokeStyle = 'rgb(120, 80, 40)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 10);
+    ctx.stroke();
 
     this._drawGrid();
     this._drawRiver();

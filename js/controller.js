@@ -15,6 +15,7 @@ const GAME_MODE = {
   PLAYER_VS_PLAYER: 'pvp',
   PLAYER_VS_AI: 'pvai',
   AI_VS_AI: 'aivai',
+  ONLINE: 'online',
 };
 
 class GameController {
@@ -22,6 +23,7 @@ class GameController {
     this.board = Board.createInitialBoard();
     this.gameMode = GAME_MODE.PLAYER_VS_AI;
     this.aiColor = PieceColor.BLACK;
+    this.myColor = null; // for online mode
     this.difficulty = AI_DIFFICULTY.PROFESSIONAL;
     this.ai = this._createAI(this.difficulty);
     this.moveHistory = [];
@@ -32,18 +34,18 @@ class GameController {
     this.onGameOver = null;
     this.onAIThinking = null;
     this.onMoveCompleted = null;
+    this.onMLFallback = null;
   }
 
   _createAI(difficulty) {
     if (difficulty.isML) {
       const mlAI = new MLChessAI();
-      mlAI.loadModel(); // preload
+      mlAI.loadModel();
       return mlAI;
     }
     return new ChessAI(difficulty.depth, difficulty.timeLimit, difficulty.quiescenceDepth);
   }
 
-  // Fallback AI when ML model fails to load
   _fallbackAI() {
     return new ChessAI(
       AI_DIFFICULTY.MASTER.depth,
@@ -57,6 +59,10 @@ class GameController {
     this.aiColor = aiColor;
   }
 
+  setOnlineColor(color) {
+    this.myColor = color;
+  }
+
   setDifficulty(difficulty) {
     this.difficulty = difficulty;
     this.ai = this._createAI(difficulty);
@@ -66,7 +72,7 @@ class GameController {
     this.board = Board.createInitialBoard();
     this.moveHistory = [];
     this.gameOver = false;
-    this.ai.clearCache();
+    if (this.ai?.clearCache) this.ai.clearCache();
 
     if (this.onBoardUpdated) this.onBoardUpdated(this.board);
 
@@ -109,6 +115,30 @@ class GameController {
     return true;
   }
 
+  // Apply opponent's move in online mode
+  makeRemoteMove(move) {
+    if (this.gameOver) return false;
+
+    const legalMoves = this.board.getAllLegalMoves();
+    const matched = legalMoves.find(
+      m => m.from.equals(move.from) && m.to.equals(move.to)
+    );
+    if (!matched) {
+      console.error('Invalid remote move:', move);
+      return false;
+    }
+
+    this.board = this.board.makeMove(matched);
+    this.board.currentPlayer = PieceColor.opposite(this.board.currentPlayer);
+    this.moveHistory.push(matched);
+
+    if (this.onMoveCompleted) this.onMoveCompleted(matched);
+    if (this.onBoardUpdated) this.onBoardUpdated(this.board);
+
+    this.checkGameOver();
+    return true;
+  }
+
   async makeAIMove() {
     if (this.gameOver) return;
 
@@ -117,7 +147,6 @@ class GameController {
     try {
       let move = await this.ai.findBestMove(this.board, this.moveHistory);
 
-      // Fallback: if ML model failed, switch to Master-level Alpha-Beta
       if (!move && this.ai instanceof MLChessAI) {
         const error = this.ai.loadError || 'unknown error';
         console.warn('ML model unavailable:', error, '- falling back to Alpha-Beta AI');
@@ -149,13 +178,12 @@ class GameController {
   }
 
   undoLastMove() {
+    if (this.gameMode === GAME_MODE.ONLINE) return; // no undo in online
     if (this.moveHistory.length === 0) return;
 
     const movesToUndo = (this.gameMode === GAME_MODE.PLAYER_VS_AI && this.moveHistory.length >= 2) ? 2 : 1;
-
     this.moveHistory.splice(-movesToUndo);
 
-    // Rebuild board from history
     this.board = Board.createInitialBoard();
     for (const move of this.moveHistory) {
       this.board = this.board.makeMove(move);
@@ -163,19 +191,20 @@ class GameController {
     }
 
     this.gameOver = false;
-
     if (this.onBoardUpdated) this.onBoardUpdated(this.board);
   }
 
   isPlayerTurn() {
     if (this.gameMode === GAME_MODE.PLAYER_VS_PLAYER) return true;
     if (this.gameMode === GAME_MODE.AI_VS_AI) return false;
+    if (this.gameMode === GAME_MODE.ONLINE) return this.board.currentPlayer === this.myColor;
     return this.board.currentPlayer !== this.aiColor;
   }
 
   shouldAIMove() {
     if (this.gameOver) return false;
     if (this.gameMode === GAME_MODE.PLAYER_VS_PLAYER) return false;
+    if (this.gameMode === GAME_MODE.ONLINE) return false;
     if (this.gameMode === GAME_MODE.AI_VS_AI) return true;
     return this.board.currentPlayer === this.aiColor;
   }
@@ -201,8 +230,8 @@ class GameController {
 
   getAIStats() {
     return {
-      nodesSearched: this.ai.nodesSearched,
-      cacheSize: this.ai.getCacheSize(),
+      nodesSearched: this.ai?.nodesSearched || 0,
+      cacheSize: this.ai?.getCacheSize?.() || 0,
       difficulty: this.difficulty,
     };
   }

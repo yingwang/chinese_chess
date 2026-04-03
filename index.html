@@ -244,6 +244,7 @@
                     <option value="PLAYER_VS_AI" data-i18n="pvai">人机对战</option>
                     <option value="PLAYER_VS_PLAYER" data-i18n="pvp">双人对战</option>
                     <option value="AI_VS_AI" data-i18n="aivai">电脑对战</option>
+                    <option value="ONLINE" data-i18n="online">在线对战</option>
                 </select>
             </div>
             <div class="setting" id="difficulty-setting">
@@ -271,6 +272,38 @@
         </div>
     </div>
 
+    <!-- Online Game Dialog -->
+    <div id="online-dialog" class="modal hidden">
+        <div class="modal-content">
+            <h2 data-i18n="online">在线对战</h2>
+            <div id="online-menu">
+                <div class="dialog-buttons" style="flex-direction:column;gap:12px">
+                    <button id="create-game-btn" data-i18n="createGame">创建房间</button>
+                    <button id="join-game-btn" data-i18n="joinGameBtn">加入房间</button>
+                    <button id="online-back-btn" data-i18n="cancel">取消</button>
+                </div>
+            </div>
+            <div id="online-waiting" style="display:none">
+                <p data-i18n="gameCode" style="color:#ffd700;font-size:1.1em">房间号:</p>
+                <p id="room-code-display" style="font-size:2em;color:#fff;letter-spacing:8px;margin:8px 0"></p>
+                <button id="copy-code-btn" style="background:#1a2a50;color:#ffd700;border:1px solid #ffd70055;border-radius:6px;padding:6px 16px;cursor:pointer;font-family:inherit" data-i18n="copyCode">复制</button>
+                <p style="margin-top:12px;color:#aaa" data-i18n="waiting">等待对手加入...</p>
+                <div class="dialog-buttons" style="margin-top:16px">
+                    <button id="cancel-online-btn" data-i18n="cancel">取消</button>
+                </div>
+            </div>
+            <div id="online-join" style="display:none">
+                <p data-i18n="enterCode" style="color:#ccc;margin-bottom:8px">输入房间号</p>
+                <input id="join-code-input" type="text" maxlength="4" style="background:#0f1a30;color:#fff;border:1px solid #ffd70033;border-radius:6px;padding:10px;font-size:1.5em;text-align:center;letter-spacing:6px;width:160px;font-family:inherit;text-transform:uppercase" placeholder="____">
+                <p id="join-error" style="color:#e06060;margin-top:8px;min-height:1.2em"></p>
+                <div class="dialog-buttons">
+                    <button id="confirm-join-btn" data-i18n="joinGameBtn">加入</button>
+                    <button id="join-back-btn" data-i18n="cancel">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Game Over Dialog -->
     <div id="game-over-dialog" class="modal hidden">
         <div class="modal-content">
@@ -280,6 +313,9 @@
         </div>
     </div>
 
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.0/dist/ort.min.js"></script>
     <script type="module" src="js/main.js"></script>
 </body>

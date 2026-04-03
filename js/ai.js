@@ -906,11 +906,13 @@ export async function runBenchmark(depth = 6) {
     const move = ai.findBestMove(board);
     const elapsed = Math.round(performance.now() - start);
 
-    // Convert move to pikafish format (col-as-letter + row)
+    // Convert move to pikafish format: col letter (a-i) + row (0=red side, 9=black side)
     const colLetter = 'abcdefghi';
-    const myMove = move
-      ? `${colLetter[move.from.col]}${9 - move.from.row}${colLetter[move.to.col]}${9 - move.to.row}`
-      : 'none';
+    let myMove = 'none';
+    if (move && move.from && move.to) {
+      const fr = 9 - move.from.row, tr = 9 - move.to.row;
+      myMove = `${colLetter[move.from.col]}${fr}${colLetter[move.to.col]}${tr}`;
+    }
 
     const match = myMove === test.pk_move ? '✅' : '❌';
 

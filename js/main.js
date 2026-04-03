@@ -2,6 +2,7 @@ import { PieceColor, PieceType } from './model.js';
 import { GameController, AI_DIFFICULTY, GAME_MODE } from './controller.js';
 import { BoardView } from './view.js';
 import { SoundManager } from './audio.js';
+import { t, toggleLang, getLang, setLang } from './i18n.js';
 
 // DOM elements
 const canvas = document.getElementById('board-canvas');
@@ -10,6 +11,7 @@ const newGameBtn = document.getElementById('new-game-btn');
 const undoBtn = document.getElementById('undo-btn');
 const settingsBtn = document.getElementById('settings-btn');
 const soundBtn = document.getElementById('sound-btn');
+const langBtn = document.getElementById('lang-btn');
 const newGameDialog = document.getElementById('new-game-dialog');
 const gameOverDialog = document.getElementById('game-over-dialog');
 const gameModeSelect = document.getElementById('game-mode-select');
@@ -34,6 +36,16 @@ let aiThinking = false;
 let gameStartTime = null;
 let timerInterval = null;
 
+// i18n setup
+langBtn.textContent = getLang() === 'zh' ? 'EN' : '中';
+
+langBtn.addEventListener('click', () => {
+    toggleLang();
+    langBtn.textContent = getLang() === 'zh' ? 'EN' : '中';
+    updateStatus();
+    soundBtn.textContent = soundManager.isMuted() ? t('soundOff') : t('soundOn');
+});
+
 // Connect view to controller
 boardView.setOnMoveListener((move) => {
     if (aiThinking) return;
@@ -52,7 +64,6 @@ controller.onMoveCompleted = (move) => {
     updateStatus();
     updateMoveHistory();
 
-    // Play appropriate sound effect
     const board = controller.getCurrentBoard();
     if (board.isInCheck(board.currentPlayer)) {
         soundManager.playCheckSound();
@@ -67,7 +78,7 @@ controller.onAIThinking = (thinking) => {
     aiThinking = thinking;
     boardView.setAIThinking(thinking);
     if (thinking) {
-        statusEl.textContent = '思考中...';
+        statusEl.textContent = t('thinking');
     } else {
         updateStatus();
     }
@@ -83,8 +94,12 @@ function updateStatus() {
     if (controller.gameOver) return;
     const board = controller.getCurrentBoard();
     const inCheck = board.isInCheck(board.currentPlayer);
-    const playerName = board.currentPlayer === PieceColor.RED ? '红方' : '黑方';
-    statusEl.textContent = playerName + '走棋' + (inCheck ? ' — 将军!' : '');
+    const isRed = board.currentPlayer === PieceColor.RED;
+    if (inCheck) {
+        statusEl.textContent = isRed ? t('redTurnCheck') : t('blackTurnCheck');
+    } else {
+        statusEl.textContent = isRed ? t('redTurn') : t('blackTurn');
+    }
 }
 
 // Timer
@@ -110,7 +125,7 @@ function updateTimer() {
     elapsedTimeEl.textContent = minutes + ':' + seconds;
 }
 
-// Chinese chess notation
+// Chess notation
 const CHINESE_NUMERALS = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
 function toChineseNotation(move) {
@@ -120,35 +135,21 @@ function toChineseNotation(move) {
     const isRed = piece.color === PieceColor.RED;
 
     const pieceName = piece.type.getDisplayName(piece.color);
-
-    // Column numbers from player's perspective (right to left)
-    // Red: col 0 = 九, col 8 = 一 → number = 9 - col
-    // Black: col 0 = 1, col 8 = 9 → number = col + 1
     const fromCol = isRed ? 9 - from.col : from.col + 1;
     const toCol = isRed ? 9 - to.col : to.col + 1;
-
     const formatNum = (n) => isRed ? CHINESE_NUMERALS[n] : String(n);
 
     let direction, lastNum;
     if (from.row === to.row) {
-        // Horizontal move
         direction = '平';
         lastNum = formatNum(toCol);
     } else {
-        // Advancing: Red moves up (row decreases), Black moves down (row increases)
         const isAdvancing = isRed ? (to.row < from.row) : (to.row > from.row);
         direction = isAdvancing ? '进' : '退';
-
-        // Diagonal pieces (Horse, Elephant, Advisor): use destination column
-        // Straight-line pieces (General, Chariot, Cannon, Soldier): use step count
         const isDiagonal = (piece.type === PieceType.HORSE ||
                             piece.type === PieceType.ELEPHANT ||
                             piece.type === PieceType.ADVISOR);
-        if (isDiagonal) {
-            lastNum = formatNum(toCol);
-        } else {
-            lastNum = formatNum(Math.abs(to.row - from.row));
-        }
+        lastNum = isDiagonal ? formatNum(toCol) : formatNum(Math.abs(to.row - from.row));
     }
 
     return `${pieceName}${formatNum(fromCol)}${direction}${lastNum}`;
@@ -174,12 +175,11 @@ function updateMoveHistory() {
 // Game Over dialog
 function showGameOverDialog(result) {
     if (result.type === 'checkmate') {
-        const winnerName = result.winner === PieceColor.RED ? '红方' : '黑方';
-        gameOverTitle.textContent = winnerName + '获胜!';
-        gameOverMessage.textContent = '将杀!';
+        gameOverTitle.textContent = result.winner === PieceColor.RED ? t('redWins') : t('blackWins');
+        gameOverMessage.textContent = t('checkmate');
     } else {
-        gameOverTitle.textContent = '和棋';
-        gameOverMessage.textContent = '无子可走，平局。';
+        gameOverTitle.textContent = t('draw');
+        gameOverMessage.textContent = t('stalemate');
     }
     gameOverDialog.classList.remove('hidden');
 }
@@ -211,7 +211,6 @@ startGameBtn.addEventListener('click', () => {
     const modeKey = gameModeSelect.value;
     const mode = GAME_MODE[modeKey];
     const difficulty = AI_DIFFICULTY[difficultySelect.value];
-    // colorSelect is the player's color; AI plays the opposite side
     const aiColor = colorSelect.value === 'RED' ? PieceColor.BLACK : PieceColor.RED;
 
     controller.setGameMode(mode, aiColor);
@@ -225,7 +224,6 @@ startGameBtn.addEventListener('click', () => {
     startTimer();
     updateStatus();
 
-    // Start background music (requires user interaction)
     soundManager.startBackgroundMusic();
 });
 
@@ -238,7 +236,7 @@ undoBtn.addEventListener('click', () => {
 
 soundBtn.addEventListener('click', () => {
     const muted = soundManager.toggleMute();
-    soundBtn.textContent = muted ? '🔇 音效' : '🔊 音效';
+    soundBtn.textContent = muted ? t('soundOff') : t('soundOn');
 });
 
 gameOverNewGameBtn.addEventListener('click', () => {
@@ -257,4 +255,4 @@ resizeCanvas();
 // Start default game and show setup dialog on initial load
 controller.startNewGame();
 showNewGameDialog();
-statusEl.textContent = '请选择游戏设置';
+statusEl.textContent = t('selectSettings');

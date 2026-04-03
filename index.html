@@ -56,18 +56,19 @@
         }
         #controls {
             display: flex;
-            gap: 12px;
+            gap: 8px;
             padding: 10px 0;
             width: 100%;
             justify-content: center;
+            flex-wrap: wrap;
         }
         #controls button {
             background: #16213e;
             color: #ffd700;
             border: 1px solid #ffd70055;
             border-radius: 8px;
-            padding: 10px 24px;
-            font-size: 1em;
+            padding: 10px 18px;
+            font-size: 0.95em;
             cursor: pointer;
             font-family: inherit;
             transition: background 0.2s;
@@ -116,10 +117,6 @@
             font-size: 0.85em;
             line-height: 1.6;
             padding: 4px 0;
-        }
-        #move-history:empty::after {
-            content: '暂无记录';
-            color: #666;
         }
         .move-entry {
             display: inline;
@@ -212,25 +209,26 @@
 <body>
     <div id="app">
         <div id="header">
-            <h1>中国象棋</h1>
-            <div id="status">红方走棋</div>
+            <h1 data-i18n="title">中国象棋</h1>
+            <div id="status" data-i18n="redTurn">红方走棋</div>
         </div>
         <div id="game-container">
             <canvas id="board-canvas"></canvas>
         </div>
         <div id="controls">
-            <button id="new-game-btn">新游戏</button>
-            <button id="undo-btn">悔棋</button>
-            <button id="settings-btn">设置</button>
-            <button id="sound-btn">🔊 音效</button>
+            <button id="new-game-btn" data-i18n="newGame">新游戏</button>
+            <button id="undo-btn" data-i18n="undo">悔棋</button>
+            <button id="settings-btn" data-i18n="settings">设置</button>
+            <button id="sound-btn" data-i18n="soundOn">🔊 音效</button>
+            <button id="lang-btn">EN</button>
         </div>
         <div id="info-panel" class="hidden">
             <div id="timer-display">
-                <span class="info-label">时间:</span>
+                <span class="info-label" data-i18n="time">时间:</span>
                 <span id="elapsed-time">00:00</span>
             </div>
             <div id="history-panel">
-                <span class="info-label">走棋记录:</span>
+                <span class="info-label" data-i18n="moveHistory">走棋记录:</span>
                 <div id="move-history" aria-label="走棋记录"></div>
             </div>
         </div>
@@ -239,36 +237,36 @@
     <!-- New Game Dialog -->
     <div id="new-game-dialog" class="modal hidden">
         <div class="modal-content">
-            <h2>新游戏</h2>
+            <h2 data-i18n="newGame">新游戏</h2>
             <div class="setting">
-                <label>游戏模式:</label>
+                <label data-i18n="gameMode">游戏模式:</label>
                 <select id="game-mode-select">
-                    <option value="PLAYER_VS_AI">人机对战</option>
-                    <option value="PLAYER_VS_PLAYER">双人对战</option>
-                    <option value="AI_VS_AI">电脑对战</option>
+                    <option value="PLAYER_VS_AI" data-i18n="pvai">人机对战</option>
+                    <option value="PLAYER_VS_PLAYER" data-i18n="pvp">双人对战</option>
+                    <option value="AI_VS_AI" data-i18n="aivai">电脑对战</option>
                 </select>
             </div>
             <div class="setting" id="difficulty-setting">
-                <label>难度:</label>
+                <label data-i18n="difficulty">难度:</label>
                 <select id="difficulty-select">
-                    <option value="BEGINNER">初级</option>
-                    <option value="INTERMEDIATE">中级</option>
-                    <option value="ADVANCED">高级</option>
-                    <option value="PROFESSIONAL" selected>专业</option>
-                    <option value="MASTER">大师</option>
-                    <option value="ML">AI 神经网络</option>
+                    <option value="BEGINNER" data-i18n="beginner">初级</option>
+                    <option value="INTERMEDIATE" data-i18n="intermediate">中级</option>
+                    <option value="ADVANCED" data-i18n="advanced">高级</option>
+                    <option value="PROFESSIONAL" selected data-i18n="professional">专业</option>
+                    <option value="MASTER" data-i18n="master">大师</option>
+                    <option value="ML" data-i18n="mlAI">AI 神经网络</option>
                 </select>
             </div>
             <div class="setting" id="color-setting">
-                <label>执棋:</label>
+                <label data-i18n="playAs">执棋:</label>
                 <select id="color-select">
-                    <option value="RED">红方 (先手)</option>
-                    <option value="BLACK">黑方 (后手)</option>
+                    <option value="RED" data-i18n="redFirst">红方 (先手)</option>
+                    <option value="BLACK" data-i18n="blackSecond">黑方 (后手)</option>
                 </select>
             </div>
             <div class="dialog-buttons">
-                <button id="start-game-btn">开始</button>
-                <button id="cancel-btn">取消</button>
+                <button id="start-game-btn" data-i18n="start">开始</button>
+                <button id="cancel-btn" data-i18n="cancel">取消</button>
             </div>
         </div>
     </div>
@@ -278,7 +276,7 @@
         <div class="modal-content">
             <h2 id="game-over-title"></h2>
             <p id="game-over-message"></p>
-            <button id="game-over-new-game-btn">新游戏</button>
+            <button id="game-over-new-game-btn" data-i18n="newGame">新游戏</button>
         </div>
     </div>
 

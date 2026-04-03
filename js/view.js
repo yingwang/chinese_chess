@@ -12,6 +12,11 @@ export class BoardView {
     this.cellSize = 0;
     this.offsetX = 0;
     this.offsetY = 0;
+    this.capturedByRed = [];   // pieces captured by red player
+    this.capturedByBlack = []; // pieces captured by black player
+    this.aiThinking = false;
+    this._thinkingDots = 0;
+    this._thinkingTimer = null;
 
     this.canvas.addEventListener('click', (e) => this._handleClick(e));
     this.canvas.addEventListener('touchend', (e) => {
@@ -34,7 +39,33 @@ export class BoardView {
 
   highlightMove(move) {
     this.lastMove = move;
+    if (move && move.capturedPiece) {
+      if (move.piece.color === PieceColor.RED) {
+        this.capturedByRed.push(move.capturedPiece);
+      } else {
+        this.capturedByBlack.push(move.capturedPiece);
+      }
+    }
     this.draw();
+  }
+
+  setAIThinking(thinking) {
+    this.aiThinking = thinking;
+    if (thinking) {
+      this._thinkingDots = 0;
+      this._thinkingTimer = setInterval(() => {
+        this._thinkingDots = (this._thinkingDots + 1) % 4;
+        this.draw();
+      }, 400);
+    } else {
+      if (this._thinkingTimer) { clearInterval(this._thinkingTimer); this._thinkingTimer = null; }
+    }
+    this.draw();
+  }
+
+  resetCaptured() {
+    this.capturedByRed = [];
+    this.capturedByBlack = [];
   }
 
   clearSelection() {
@@ -162,6 +193,8 @@ export class BoardView {
     this._drawLastMove();
     this._drawLegalMoves();
     this._drawPieces();
+    this._drawCaptured();
+    if (this.aiThinking) this._drawThinking();
   }
 
   _drawGrid() {
@@ -355,11 +388,14 @@ export class BoardView {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
     ctx.fill();
 
-    // Selection glow
+    // Selection glow (warm gold)
     if (isSelected) {
       ctx.beginPath();
-      ctx.arc(x, y, r + 4, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(50, 200, 50, 0.5)';
+      ctx.arc(x, y, r + 5, 0, Math.PI * 2);
+      const glowGrad = ctx.createRadialGradient(x, y, r * 0.8, x, y, r + 5);
+      glowGrad.addColorStop(0, 'rgba(255, 215, 0, 0.6)');
+      glowGrad.addColorStop(1, 'rgba(255, 180, 0, 0)');
+      ctx.fillStyle = glowGrad;
       ctx.fill();
     }
 
@@ -376,7 +412,7 @@ export class BoardView {
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     if (isSelected) {
-      ctx.strokeStyle = 'rgb(50, 200, 50)';
+      ctx.strokeStyle = 'rgb(218, 165, 32)';
       ctx.lineWidth = 2.5;
     } else if (isLastMoved) {
       ctx.strokeStyle = 'rgb(220, 140, 60)';
@@ -401,5 +437,54 @@ export class BoardView {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(displayName, x, y + 1);
+  }
+
+  _drawCaptured() {
+    const ctx = this.ctx;
+    const r = this.cellSize * 0.22;
+    const topLeft = this._toPixel(0, 0);
+    const bottomRight = this._toPixel(9, 8);
+    const pad = this.cellSize * 0.5;
+
+    // Black's captured pieces (shown above board)
+    const blackY = topLeft.y - pad - r - 4;
+    this._drawCapturedRow(ctx, this.capturedByBlack, topLeft.x, blackY, r);
+
+    // Red's captured pieces (shown below board)
+    const redY = bottomRight.y + pad + r + 4;
+    this._drawCapturedRow(ctx, this.capturedByRed, topLeft.x, redY, r);
+  }
+
+  _drawCapturedRow(ctx, pieces, startX, y, r) {
+    for (let i = 0; i < pieces.length; i++) {
+      const x = startX + i * (r * 2.2);
+      const piece = pieces[i];
+      const name = piece.type.getDisplayName(piece.color);
+      ctx.fillStyle = piece.color === PieceColor.RED ? 'rgba(200, 40, 40, 0.6)' : 'rgba(100, 100, 100, 0.6)';
+      ctx.font = `bold ${r * 1.6}px "Noto Sans CJK SC", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(name, x, y);
+    }
+  }
+
+  _drawThinking() {
+    const ctx = this.ctx;
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.canvas.width / dpr;
+    const centerX = w / 2;
+    const topLeft = this._toPixel(0, 0);
+    const y = topLeft.y - this.cellSize * 0.5 - 24;
+    const dotR = 4;
+    const gap = 14;
+
+    for (let i = 0; i < 3; i++) {
+      const x = centerX + (i - 1) * gap;
+      const alpha = i < this._thinkingDots ? 1.0 : 0.3;
+      ctx.beginPath();
+      ctx.arc(x, y, dotR, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`;
+      ctx.fill();
+    }
   }
 }

@@ -3,11 +3,11 @@ import { ChessAI } from './ai.js';
 import { MLChessAI } from './ml-ai.js';
 
 const AI_DIFFICULTY = {
-  BEGINNER:     { depth: 1, timeLimit: 500,  quiescenceDepth: 0 },
-  INTERMEDIATE: { depth: 2, timeLimit: 1000, quiescenceDepth: 1 },
-  ADVANCED:     { depth: 3, timeLimit: 2000, quiescenceDepth: 2 },
-  PROFESSIONAL: { depth: 4, timeLimit: 5000, quiescenceDepth: 3 },
-  MASTER:       { depth: 6, timeLimit: 8000, quiescenceDepth: 4 },
+  BEGINNER:     { depth: 2, timeLimit: 1000,  quiescenceDepth: 0 },
+  INTERMEDIATE: { depth: 3, timeLimit: 2000, quiescenceDepth: 2 },
+  ADVANCED:     { depth: 4, timeLimit: 3000, quiescenceDepth: 3 },
+  PROFESSIONAL: { depth: 5, timeLimit: 5000, quiescenceDepth: 4 },
+  MASTER:       { depth: 7, timeLimit: 10000, quiescenceDepth: 5 },
   ML:           { depth: 0, timeLimit: 0,   quiescenceDepth: 0, isML: true },
 };
 

@@ -65,6 +65,7 @@ controller.onMoveCompleted = (move) => {
 
 controller.onAIThinking = (thinking) => {
     aiThinking = thinking;
+    boardView.setAIThinking(thinking);
     if (thinking) {
         statusEl.textContent = '思考中...';
     } else {
@@ -220,6 +221,7 @@ startGameBtn.addEventListener('click', () => {
     newGameDialog.classList.add('hidden');
     infoPanel.classList.remove('hidden');
     moveHistoryEl.innerHTML = '';
+    boardView.resetCaptured();
     startTimer();
     updateStatus();
 

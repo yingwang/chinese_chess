@@ -1,5 +1,6 @@
 import { Board, PieceColor } from './model.js';
 import { ChessAI } from './ai.js';
+import { MLChessAI } from './ml-ai.js';
 
 const AI_DIFFICULTY = {
   BEGINNER:     { depth: 1, timeLimit: 500,  quiescenceDepth: 0 },
@@ -7,6 +8,7 @@ const AI_DIFFICULTY = {
   ADVANCED:     { depth: 3, timeLimit: 2000, quiescenceDepth: 2 },
   PROFESSIONAL: { depth: 4, timeLimit: 5000, quiescenceDepth: 3 },
   MASTER:       { depth: 6, timeLimit: 8000, quiescenceDepth: 4 },
+  ML:           { depth: 0, timeLimit: 0,   quiescenceDepth: 0, isML: true },
 };
 
 const GAME_MODE = {
@@ -33,6 +35,11 @@ class GameController {
   }
 
   _createAI(difficulty) {
+    if (difficulty.isML) {
+      const mlAI = new MLChessAI();
+      mlAI.loadModel(); // preload
+      return mlAI;
+    }
     return new ChessAI(difficulty.depth, difficulty.timeLimit, difficulty.quiescenceDepth);
   }
 

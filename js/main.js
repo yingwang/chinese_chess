@@ -89,10 +89,13 @@ controller.onGameOver = (result) => {
     showGameOverDialog(result);
 };
 
-controller.onMLFallback = () => {
+controller.onMLFallback = (error) => {
+    console.warn('ML fallback reason:', error);
     statusEl.textContent = getLang() === 'zh'
         ? '神经网络不可用，已切换为大师级 AI'
         : 'Neural network unavailable, using Master AI';
+    // Brief display then resume normal status after AI moves
+    setTimeout(() => updateStatus(), 5000);
 };
 
 // Status

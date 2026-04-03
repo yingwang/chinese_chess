@@ -126,13 +126,18 @@ export class MLChessAI {
     if (this.session) return;
     if (this.loading) return;
     this.loading = true;
+    this.loadError = null;
     try {
+      if (typeof ort === 'undefined') {
+        throw new Error('ONNX Runtime not loaded (ort undefined)');
+      }
       this.session = await ort.InferenceSession.create(modelPath, {
         executionProviders: ['wasm'],
       });
       console.log('ML model loaded');
     } catch (e) {
       console.error('Failed to load ML model:', e);
+      this.loadError = e.message || String(e);
       this.session = null;
     }
     this.loading = false;
@@ -159,7 +164,14 @@ export class MLChessAI {
     const inputTensor = new ort.Tensor('float32', tensor, [1, NUM_CHANNELS, ROWS, COLS]);
 
     // Run inference
-    const results = await this.session.run({ board: inputTensor });
+    let results;
+    try {
+      results = await this.session.run({ board: inputTensor });
+    } catch (e) {
+      console.error('ML inference failed:', e);
+      this.session = null; // force fallback on next call
+      return null;
+    }
     const policyLogits = results.policy.data;  // Float32Array(2086)
     const value = results.value.data[0];       // scalar
 

@@ -119,10 +119,11 @@ class GameController {
 
       // Fallback: if ML model failed, switch to Master-level Alpha-Beta
       if (!move && this.ai instanceof MLChessAI) {
-        console.warn('ML model unavailable, falling back to Alpha-Beta AI');
+        const error = this.ai.loadError || 'unknown error';
+        console.warn('ML model unavailable:', error, '- falling back to Alpha-Beta AI');
         this.ai = this._fallbackAI();
         move = await this.ai.findBestMove(this.board, this.moveHistory);
-        if (this.onMLFallback) this.onMLFallback();
+        if (this.onMLFallback) this.onMLFallback(error);
       }
 
       if (!move) {

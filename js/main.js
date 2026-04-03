@@ -134,8 +134,9 @@ onlineManager.onRemoteMove((move) => {
 onlineManager.onOpponentJoined(() => {
     onlineDialog.classList.add('hidden');
     infoPanel.classList.remove('hidden');
-    startTimer();
     controller.startNewGame();
+    onlineManager.startListening(); // AFTER startNewGame to avoid race
+    startTimer();
     updateStatus();
     soundManager.startBackgroundMusic();
     statusEl.textContent = t('opponentJoined');
@@ -399,6 +400,7 @@ confirmJoinBtn.addEventListener('click', async () => {
         controller.setGameMode(GAME_MODE.ONLINE);
         controller.setOnlineColor(myPieceColor);
         controller.startNewGame();
+        onlineManager.startListening(); // AFTER startNewGame
 
         onlineDialog.classList.add('hidden');
         infoPanel.classList.remove('hidden');

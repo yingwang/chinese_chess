@@ -5,7 +5,6 @@
 import { firebaseConfig } from './firebase-config.js';
 import { Position, Move, PieceColor } from './model.js';
 
-// Safe alphabet for game codes (no 0/O, 1/I/L confusion)
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 function generateCode() {
@@ -22,28 +21,22 @@ export class OnlineManager {
     this.gameCode = null;
     this.myColor = null; // 'red' or 'black'
     this.gameRef = null;
-    this.moveListener = null;
     this.presenceListener = null;
-    this.localMoveCount = 0;
+    this.appliedMoveCount = 0; // how many moves we've applied locally
     this._onRemoteMove = null;
     this._onOpponentJoined = null;
     this._onOpponentConnection = null;
     this._onGameResult = null;
+    this._listening = false;
+    this._opponentJoined = false;
   }
 
   async initialize() {
     if (this.db) return;
-    // Firebase compat SDK loaded via CDN as globals
-    if (typeof firebase === 'undefined') {
-      throw new Error('Firebase SDK not loaded');
-    }
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
+    if (typeof firebase === 'undefined') throw new Error('Firebase SDK not loaded');
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     this.auth = firebase.auth();
     this.db = firebase.database();
-
-    // Anonymous sign-in
     const result = await this.auth.signInAnonymously();
     this.uid = result.user.uid;
     console.log('Firebase auth:', this.uid);
@@ -53,7 +46,6 @@ export class OnlineManager {
     await this.initialize();
     this.cleanup();
 
-    // Generate unique code
     let code, exists = true;
     while (exists) {
       code = generateCode();
@@ -63,46 +55,35 @@ export class OnlineManager {
 
     this.gameCode = code;
     this.myColor = playerColor;
-    this.localMoveCount = 0;
+    this.appliedMoveCount = 0;
+    this.gameRef = this.db.ref(`games/${code}`);
 
-    const gameData = {
+    await this.gameRef.set({
       meta: {
         createdAt: firebase.database.ServerValue.TIMESTAMP,
         status: 'waiting',
         gameCode: code,
-        creatorUid: this.uid,
       },
       players: {
-        [playerColor]: {
-          uid: this.uid,
-          connected: true,
-          lastSeen: firebase.database.ServerValue.TIMESTAMP,
-        }
+        [playerColor]: { uid: this.uid, connected: true }
       }
-    };
+    });
 
-    this.gameRef = this.db.ref(`games/${code}`);
-    await this.gameRef.set(gameData);
-
-    // Setup presence
     this._setupPresence();
 
-    // Listen for opponent joining (once only)
+    // Wait for opponent (fire only once)
     const opponentColor = playerColor === 'red' ? 'black' : 'red';
     this._opponentJoined = false;
     this.gameRef.child(`players/${opponentColor}/uid`).on('value', (snap) => {
       if (snap.exists() && snap.val() && !this._opponentJoined) {
         this._opponentJoined = true;
         this.gameRef.child('meta/status').set('playing');
-        this._setupMoveListener();
         this._setupOpponentPresence(opponentColor);
         if (this._onOpponentJoined) this._onOpponentJoined();
       }
     });
 
-    // Save to sessionStorage for reconnection
     sessionStorage.setItem('xiangqi_online', JSON.stringify({ code, color: playerColor }));
-
     return { gameCode: code, color: playerColor };
   }
 
@@ -119,49 +100,80 @@ export class OnlineManager {
     const data = snap.val();
     if (data.meta?.status === 'finished') throw new Error('GAME_FINISHED');
 
-    // Find open seat
     let myColor;
-    if (!data.players?.red?.uid) {
-      myColor = 'red';
-    } else if (!data.players?.black?.uid) {
-      myColor = 'black';
-    } else {
-      throw new Error('GAME_FULL');
-    }
+    if (!data.players?.red?.uid) myColor = 'red';
+    else if (!data.players?.black?.uid) myColor = 'black';
+    else throw new Error('GAME_FULL');
 
     this.gameCode = code;
     this.myColor = myColor;
-    this.localMoveCount = 0;
+    this.appliedMoveCount = 0;
 
-    // Claim seat
     await this.gameRef.child(`players/${myColor}`).set({
-      uid: this.uid,
-      connected: true,
-      lastSeen: firebase.database.ServerValue.TIMESTAMP,
+      uid: this.uid, connected: true
     });
     await this.gameRef.child('meta/status').set('playing');
 
     this._setupPresence();
-    this._setupMoveListener();
-
     const opponentColor = myColor === 'red' ? 'black' : 'red';
     this._setupOpponentPresence(opponentColor);
 
     sessionStorage.setItem('xiangqi_online', JSON.stringify({ code, color: myColor }));
-
     return { gameCode: code, color: myColor };
+  }
+
+  // Start listening for moves. Call AFTER controller.startNewGame().
+  startListening() {
+    if (this._listening || !this.gameRef) return;
+    this._listening = true;
+    this.appliedMoveCount = 0;
+
+    this.gameRef.child('moves').on('child_added', (snap) => {
+      const idx = parseInt(snap.key);
+      // Only process moves we haven't applied yet
+      if (idx < this.appliedMoveCount) return;
+
+      // Determine if this is our move or opponent's
+      // Even indices (0,2,4...) = Red's moves, odd (1,3,5...) = Black's
+      const moveColor = idx % 2 === 0 ? 'red' : 'black';
+      const isOurMove = moveColor === this.myColor;
+
+      if (isOurMove) {
+        // Our own move echoed back - just update count
+        this.appliedMoveCount = idx + 1;
+        return;
+      }
+
+      // Opponent's move - apply it
+      const data = snap.val();
+      if (!data) return;
+
+      const from = new Position(data.fromRow, data.fromCol);
+      const to = new Position(data.toRow, data.toCol);
+      const move = new Move(from, to, null, null);
+
+      this.appliedMoveCount = idx + 1;
+      console.log(`Remote move received: ${idx} (${data.fromRow},${data.fromCol})→(${data.toRow},${data.toCol})`);
+      if (this._onRemoteMove) this._onRemoteMove(move);
+    });
+
+    // Listen for game result
+    this.gameRef.child('result').on('value', (snap) => {
+      if (snap.exists() && this._onGameResult) this._onGameResult(snap.val());
+    });
   }
 
   sendMove(move) {
     if (!this.gameRef) return;
+    // Write at the current total move count
+    const idx = this.appliedMoveCount;
     const data = {
-      fromRow: move.from.row,
-      fromCol: move.from.col,
-      toRow: move.to.row,
-      toCol: move.to.col,
+      fromRow: move.from.row, fromCol: move.from.col,
+      toRow: move.to.row, toCol: move.to.col,
     };
-    this.gameRef.child(`moves/${this.localMoveCount}`).set(data);
-    this.localMoveCount++;
+    console.log(`Sending move: ${idx} (${data.fromRow},${data.fromCol})→(${data.toRow},${data.toCol})`);
+    this.gameRef.child(`moves/${idx}`).set(data);
+    this.appliedMoveCount = idx + 1;
   }
 
   onRemoteMove(callback) { this._onRemoteMove = callback; }
@@ -181,74 +193,41 @@ export class OnlineManager {
   isOnline() { return this.gameRef !== null; }
 
   cleanup() {
-    if (this.moveListener) {
-      this.gameRef?.child('moves').off('child_added', this.moveListener);
-      this.moveListener = null;
+    if (this.gameRef) {
+      this.gameRef.child('moves').off();
+      this.gameRef.child('result').off();
+      this.gameRef.child(`players`).off();
+      const opp = this.myColor === 'red' ? 'black' : 'red';
+      this.gameRef.child(`players/${opp}/uid`).off();
+      this.gameRef.child(`players/${opp}/connected`).off();
     }
     if (this.presenceListener) {
       this.db?.ref('.info/connected').off('value', this.presenceListener);
       this.presenceListener = null;
     }
-    if (this.gameRef) {
-      this.gameRef.child(`players/${this.myColor}`).off();
-      const opponentColor = this.myColor === 'red' ? 'black' : 'red';
-      this.gameRef.child(`players/${opponentColor}`).off();
-      this.gameRef.child('result').off();
-    }
     this.gameRef = null;
     this.gameCode = null;
     this.myColor = null;
-    this.localMoveCount = 0;
+    this.appliedMoveCount = 0;
+    this._listening = false;
+    this._opponentJoined = false;
     sessionStorage.removeItem('xiangqi_online');
   }
 
   _setupPresence() {
     const connRef = this.db.ref('.info/connected');
     const playerRef = this.gameRef.child(`players/${this.myColor}`);
-
     this.presenceListener = connRef.on('value', (snap) => {
       if (snap.val() === true) {
-        playerRef.update({ connected: true, lastSeen: firebase.database.ServerValue.TIMESTAMP });
-        playerRef.onDisconnect().update({ connected: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
-      }
-    });
-  }
-
-  _setupMoveListener() {
-    let receivedCount = 0;
-    this.moveListener = this.gameRef.child('moves').on('child_added', (snap) => {
-      const idx = parseInt(snap.key);
-      // Skip our own moves
-      if (idx < this.localMoveCount) {
-        receivedCount++;
-        return;
-      }
-      receivedCount++;
-      const data = snap.val();
-      if (!data) return;
-
-      const from = new Position(data.fromRow, data.fromCol);
-      const to = new Position(data.toRow, data.toCol);
-      // Create minimal move object — controller will find the full legal move
-      const move = new Move(from, to, null, null);
-
-      this.localMoveCount = idx + 1;
-      if (this._onRemoteMove) this._onRemoteMove(move);
-    });
-
-    // Listen for game result
-    this.gameRef.child('result').on('value', (snap) => {
-      if (snap.exists() && this._onGameResult) {
-        this._onGameResult(snap.val());
+        playerRef.update({ connected: true });
+        playerRef.onDisconnect().update({ connected: false });
       }
     });
   }
 
   _setupOpponentPresence(opponentColor) {
     this.gameRef.child(`players/${opponentColor}/connected`).on('value', (snap) => {
-      if (this._onOpponentConnection) {
-        this._onOpponentConnection(snap.val() === true);
-      }
+      if (this._onOpponentConnection) this._onOpponentConnection(snap.val() === true);
     });
   }
 }

@@ -56,13 +56,22 @@ let timerInterval = null;
 let isOnlineGame = false;
 
 // i18n
-langBtn.textContent = getLang() === 'zh' ? 'EN' : '中';
-langBtn.addEventListener('click', () => {
+const dialogLangBtn = document.getElementById('dialog-lang-btn');
+function updateLangButtons() {
+    const label = getLang() === 'zh' ? 'EN' : '中';
+    langBtn.textContent = label;
+    dialogLangBtn.textContent = label;
+}
+updateLangButtons();
+
+function switchLang() {
     toggleLang();
-    langBtn.textContent = getLang() === 'zh' ? 'EN' : '中';
+    updateLangButtons();
     updateStatus();
     soundBtn.textContent = soundManager.isMuted() ? t('soundOff') : t('soundOn');
-});
+}
+langBtn.addEventListener('click', switchLang);
+dialogLangBtn.addEventListener('click', switchLang);
 
 // === Controller callbacks ===
 

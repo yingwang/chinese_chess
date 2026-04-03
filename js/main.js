@@ -86,6 +86,7 @@ controller.onAIThinking = (thinking) => {
 
 controller.onGameOver = (result) => {
     stopTimer();
+    soundManager.stopBackgroundMusic();
     showGameOverDialog(result);
 };
 

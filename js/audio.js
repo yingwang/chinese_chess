@@ -11,8 +11,8 @@ export class SoundManager {
 
     // Background music uses HTML Audio element for proper WAV playback
     this.bgAudio = new Audio('bgm.wav');
-    this.bgAudio.loop = true;
-    this.bgAudio.volume = 0.25;
+    this.bgAudio.loop = false; // play once per game, not infinite loop
+    this.bgAudio.volume = 0.2;
   }
 
   _ensureContext() {

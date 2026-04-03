@@ -190,19 +190,45 @@ export class BoardView {
 
     // Drop shadow
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.3)';
-    ctx.shadowBlur = 12;
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 16;
     ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 4;
-    ctx.fillStyle = 'rgb(205, 170, 125)';
+    ctx.shadowOffsetY = 6;
+
+    // Wood gradient base (matches mobile)
+    const woodGrad = ctx.createLinearGradient(bx, by, bx, by + bh);
+    woodGrad.addColorStop(0, 'rgb(200, 165, 120)');
+    woodGrad.addColorStop(0.3, 'rgb(190, 150, 100)');
+    woodGrad.addColorStop(0.5, 'rgb(195, 158, 108)');
+    woodGrad.addColorStop(0.7, 'rgb(185, 145, 95)');
+    woodGrad.addColorStop(1, 'rgb(175, 135, 90)');
+    ctx.fillStyle = woodGrad;
     ctx.beginPath();
     ctx.roundRect(bx, by, bw, bh, 10);
     ctx.fill();
     ctx.restore();
 
+    // Wood grain lines
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 10);
+    ctx.clip();
+    ctx.globalAlpha = 0.08;
+    ctx.strokeStyle = 'rgb(80, 50, 20)';
+    ctx.lineWidth = 0.8;
+    for (let y = by; y < by + bh; y += 4 + Math.random() * 3) {
+      ctx.beginPath();
+      ctx.moveTo(bx, y);
+      for (let x = bx; x < bx + bw; x += 10) {
+        ctx.lineTo(x, y + Math.sin(x * 0.02 + y * 0.01) * 2);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+
     // Outer border
-    ctx.strokeStyle = 'rgb(120, 80, 40)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgb(100, 65, 30)';
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.roundRect(bx, by, bw, bh, 10);
     ctx.stroke();
@@ -402,60 +428,80 @@ export class BoardView {
   _drawPiece(x, y, piece, r, isSelected, isLastMoved) {
     const ctx = this.ctx;
 
-    // Shadow
+    // Drop shadow (blurred, offset)
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 3;
     ctx.beginPath();
-    ctx.arc(x + 2, y + 2, r, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(180,160,130,1)';
     ctx.fill();
+    ctx.restore();
 
-    // Selection glow (warm gold)
+    // Selection glow (multi-layer warm gold, matches mobile)
     if (isSelected) {
-      ctx.beginPath();
-      ctx.arc(x, y, r + 5, 0, Math.PI * 2);
-      const glowGrad = ctx.createRadialGradient(x, y, r * 0.8, x, y, r + 5);
-      glowGrad.addColorStop(0, 'rgba(255, 215, 0, 0.6)');
-      glowGrad.addColorStop(1, 'rgba(255, 180, 0, 0)');
-      ctx.fillStyle = glowGrad;
-      ctx.fill();
+      for (let i = 3; i >= 1; i--) {
+        ctx.beginPath();
+        ctx.arc(x, y, r + i * 3, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 200, 80, ${0.12 * i})`;
+        ctx.fill();
+      }
     }
 
-    // Piece circle with gradient
-    const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
-    grad.addColorStop(0, 'rgb(255, 245, 220)');
-    grad.addColorStop(1, 'rgb(210, 190, 160)');
+    // Last-moved golden ring
+    if (isLastMoved && !isSelected) {
+      ctx.beginPath();
+      ctx.arc(x, y, r + 3, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(220, 160, 60, 0.7)';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+
+    // Piece body — 4-stop radial gradient (matches mobile)
+    const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.05, x, y, r);
+    grad.addColorStop(0, 'rgb(255, 250, 235)');   // specular highlight
+    grad.addColorStop(0.3, 'rgb(245, 235, 210)');
+    grad.addColorStop(0.7, 'rgb(220, 200, 170)');
+    grad.addColorStop(1, 'rgb(195, 175, 145)');
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Outline
+    // Outer ring
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     if (isSelected) {
-      ctx.strokeStyle = 'rgb(218, 165, 32)';
-      ctx.lineWidth = 2.5;
-    } else if (isLastMoved) {
-      ctx.strokeStyle = 'rgb(220, 140, 60)';
+      ctx.strokeStyle = 'rgb(200, 155, 30)';
       ctx.lineWidth = 2.5;
     } else {
-      ctx.strokeStyle = 'rgb(80, 60, 40)';
+      ctx.strokeStyle = 'rgb(100, 75, 45)';
       ctx.lineWidth = 1.5;
     }
     ctx.stroke();
 
-    // Inner ring for decoration
+    // Inner decorative ring
     ctx.beginPath();
     ctx.arc(x, y, r * 0.82, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgb(80, 60, 40)';
-    ctx.lineWidth = 0.8;
+    ctx.strokeStyle = 'rgb(110, 85, 55)';
+    ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Chinese character
+    // Chinese character with slight shadow for depth
     const displayName = piece.type.getDisplayName(piece.color);
-    ctx.fillStyle = piece.color === PieceColor.RED ? 'rgb(200, 40, 40)' : 'rgb(30, 30, 30)';
-    ctx.font = `bold ${r * 1.1}px "Noto Sans CJK SC", "Noto Serif SC", "Microsoft YaHei", "PingFang SC", sans-serif`;
+    const textColor = piece.color === PieceColor.RED ? 'rgb(180, 30, 30)' : 'rgb(25, 25, 25)';
+
+    // Text shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.1)';
+    ctx.font = `bold ${r * 1.1}px "Noto Serif SC", "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    ctx.fillText(displayName, x + 0.5, y + 1.5);
+
+    // Main text
+    ctx.fillStyle = textColor;
     ctx.fillText(displayName, x, y + 1);
   }
 

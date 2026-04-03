@@ -346,6 +346,7 @@ export const OpeningBook = {
   ]),
 
   getOpeningMove(moveHistory) {
+    if (!moveHistory.every(m => m && m.from && m.to)) return null;
     const key = JSON.stringify(moveHistory.map(m => `${m.from.row},${m.from.col},${m.to.row},${m.to.col}`));
     const candidates = this._moves.get(key);
     if (!candidates || candidates.length === 0) return null;
@@ -902,8 +903,10 @@ export async function runBenchmark(depth = 6) {
     const board = Board.fromFen(test.fen);
     ai.clearCache();
 
+    // Pass fake history length > 8 to skip opening book
+    const fakeHistory = new Array(10).fill(null);
     const start = performance.now();
-    const move = ai.findBestMove(board);
+    const move = ai.findBestMove(board, fakeHistory);
     const elapsed = Math.round(performance.now() - start);
 
     // Convert move to pikafish format: col letter (a-i) + row (0=red side, 9=black side)

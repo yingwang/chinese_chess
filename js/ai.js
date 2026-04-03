@@ -119,96 +119,99 @@ export const Evaluator = {
     return Math.min(1.0, material / TOTAL_START_MATERIAL);
   },
 
-  _evaluateKingSafety(board, color) {
-    const general = board._findGeneral(color);
-    if (!general) return 0;
+  _evaluateKingSafety(pieces, color) {
     let safety = 0;
-    const gRow = general.position.row;
-    const gCol = general.position.col;
+    let advisorCount = 0, elephantCount = 0;
+    let general = null;
 
-    // Bonus for each advisor/elephant alive (they protect the king)
-    for (const piece of board.getPiecesByColor(color)) {
-      if (piece.type === PieceType.ADVISOR) {
-        safety += 15;
-        // Extra bonus if adjacent to general
-        if (Math.abs(piece.position.row - gRow) <= 1 && Math.abs(piece.position.col - gCol) <= 1) {
-          safety += 10;
-        }
-      } else if (piece.type === PieceType.ELEPHANT) {
-        safety += 10;
-      }
+    for (const p of pieces) {
+      if (p.color !== color) continue;
+      if (p.type === PieceType.ADVISOR) advisorCount++;
+      else if (p.type === PieceType.ELEPHANT) elephantCount++;
+      else if (p.type === PieceType.GENERAL) general = p;
     }
 
-    // Penalty if general is exposed on the center column with no blockers
-    if (gCol === 4) {
-      let hasBlocker = false;
-      const dir = color === PieceColor.RED ? -1 : 1;
-      for (let r = gRow + dir; r >= 0 && r <= 9; r += dir) {
-        if (board.getPiece(new Position(r, gCol))) {
-          hasBlocker = true;
-          break;
-        }
-      }
-      if (!hasBlocker) {
-        safety -= 20;
-      }
-    }
+    // Penalty for missing defenders
+    if (advisorCount === 0) safety -= 40;
+    else if (advisorCount === 1) safety -= 15;
+    if (elephantCount === 0) safety -= 25;
+    else if (elephantCount === 1) safety -= 10;
+
+    // Bonus for general staying in center column
+    if (general && general.position.col === 4) safety += 10;
 
     return safety;
   },
 
-  _evaluateMobility(board, color) {
-    const savedPlayer = board.currentPlayer;
-    board.currentPlayer = color;
-    let mobility = 0;
-    for (const piece of board.getPiecesByColor(color)) {
-      if (piece.type === PieceType.GENERAL || piece.type === PieceType.ADVISOR || piece.type === PieceType.ELEPHANT) continue;
-      const moves = piece.getLegalMoves(board);
-      if (piece.type === PieceType.CHARIOT) {
-        mobility += moves.length * 3;
-      } else if (piece.type === PieceType.CANNON) {
-        mobility += moves.length * 2;
-      } else if (piece.type === PieceType.HORSE) {
-        mobility += moves.length * 2;
-      } else {
-        mobility += moves.length;
-      }
-    }
-    board.currentPlayer = savedPlayer;
-    return mobility;
-  },
 
-  _evaluatePieceCoordination(board, color) {
+  _evaluateThreats(allPieces, totalPieceCount) {
     let score = 0;
-    const chariots = [];
-    const cannons = [];
-    const horses = [];
+    for (const piece of allPieces) {
+      const row = piece.position.row;
+      const isRed = piece.color === PieceColor.RED;
+      const sign = isRed ? 1 : -1;
 
-    for (const piece of board.getPiecesByColor(color)) {
-      if (piece.type === PieceType.CHARIOT) chariots.push(piece);
-      else if (piece.type === PieceType.CANNON) cannons.push(piece);
-      else if (piece.type === PieceType.HORSE) horses.push(piece);
-    }
-
-    // Connected chariots (same row or column)
-    if (chariots.length === 2) {
-      if (chariots[0].position.row === chariots[1].position.row ||
-          chariots[0].position.col === chariots[1].position.col) {
-        score += 20;
-      }
-    }
-
-    // Horse-cannon coordination: bonus when they're near each other
-    for (const horse of horses) {
-      for (const cannon of cannons) {
-        const dist = Math.abs(horse.position.row - cannon.position.row) +
-                     Math.abs(horse.position.col - cannon.position.col);
-        if (dist <= 3) {
-          score += 10;
+      switch (piece.type) {
+        case PieceType.SOLDIER: {
+          const crossed = isRed ? row <= 4 : row >= 5;
+          if (crossed) {
+            score += sign * 20;
+            if (piece.position.col >= 3 && piece.position.col <= 5) score += sign * 15;
+          }
+          break;
+        }
+        case PieceType.HORSE: {
+          const inEnemy = isRed ? row <= 4 : row >= 5;
+          if (inEnemy) score += sign * 15;
+          const nearGeneral = isRed ? row <= 2 : row >= 7;
+          if (nearGeneral && piece.position.col >= 2 && piece.position.col <= 6) score += sign * 25;
+          break;
+        }
+        case PieceType.CHARIOT: {
+          const deep = isRed ? row <= 2 : row >= 7;
+          if (deep) score += sign * 20;
+          break;
+        }
+        case PieceType.CANNON: {
+          if (totalPieceCount <= 10) score -= sign * 30;
+          break;
         }
       }
     }
+    return score;
+  },
 
+  _evaluateChariotActivity(allPieces) {
+    let score = 0;
+    for (const piece of allPieces) {
+      if (piece.type !== PieceType.CHARIOT) continue;
+      const col = piece.position.col;
+      const isRed = piece.color === PieceColor.RED;
+      const sign = isRed ? 1 : -1;
+
+      // Open file bonus (no own soldiers on same column)
+      const hasSoldier = allPieces.some(p =>
+        p.color === piece.color && p.type === PieceType.SOLDIER && p.position.col === col
+      );
+      if (!hasSoldier) score += sign * 15;
+
+      // Penalty for staying on home rank
+      const onHome = isRed ? piece.position.row === 9 : piece.position.row === 0;
+      if (onHome) score -= sign * 20;
+    }
+    return score;
+  },
+
+  _evaluateHorseCoordination(allPieces) {
+    let score = 0;
+    for (const color of [PieceColor.RED, PieceColor.BLACK]) {
+      const horses = allPieces.filter(p => p.type === PieceType.HORSE && p.color === color);
+      if (horses.length === 2) {
+        const dist = Math.abs(horses[0].position.row - horses[1].position.row) +
+                     Math.abs(horses[0].position.col - horses[1].position.col);
+        if (dist >= 2 && dist <= 4) score += (color === PieceColor.RED ? 10 : -10);
+      }
+    }
     return score;
   },
 
@@ -216,70 +219,40 @@ export const Evaluator = {
     const redGeneral = board._findGeneral(PieceColor.RED);
     const blackGeneral = board._findGeneral(PieceColor.BLACK);
 
-    // Checkmate detection
     if (!redGeneral) return -this.CHECKMATE_SCORE;
     if (!blackGeneral) return this.CHECKMATE_SCORE;
 
-    // Only do expensive checkmate check when in check (rare)
     const currentPlayerInCheck = board.isInCheck(board.currentPlayer);
     if (currentPlayerInCheck && board.getAllLegalMoves().length === 0) {
       return board.currentPlayer === PieceColor.RED ? -this.CHECKMATE_SCORE : this.CHECKMATE_SCORE;
     }
 
-    const phase = this._getGamePhase(board);
+    const allPieces = board.getAllPieces();
+    const totalPieceCount = allPieces.length;
     let score = 0;
 
-    for (const piece of board.getAllPieces()) {
-      const baseValue = piece.type.baseValue;
-      const positionalValue = this._getPositionalValue(piece);
-      const pieceScore = baseValue + positionalValue;
-
+    // Material + positional (piece-square tables)
+    for (const piece of allPieces) {
+      const pieceScore = piece.type.baseValue + this._getPositionalValue(piece);
       score += piece.color === PieceColor.RED ? pieceScore : -pieceScore;
-
-      // Center control bonus (cols 3-5)
-      const col = piece.position.col;
-      if (col >= 3 && col <= 5) {
-        let bonus = 0;
-        if (piece.type === PieceType.HORSE || piece.type === PieceType.CHARIOT || piece.type === PieceType.CANNON) {
-          bonus = 5;
-        } else if (piece.type === PieceType.SOLDIER) {
-          bonus = 3;
-        }
-        score += piece.color === PieceColor.RED ? bonus : -bonus;
-      }
-
-      // Crossed-river soldier bonus (more valuable as game progresses)
-      if (piece.type === PieceType.SOLDIER) {
-        const crossedRiver = piece.color === PieceColor.RED ? piece.position.row <= 4 : piece.position.row >= 5;
-        if (crossedRiver) {
-          const bonus = Math.round(20 * (1 - phase) + 10);
-          score += piece.color === PieceColor.RED ? bonus : -bonus;
-        }
-      }
     }
 
-    // King safety (weighted more in opening/middlegame)
-    const kingSafetyWeight = 0.5 + phase * 0.5;
-    const redKingSafety = Math.round(this._evaluateKingSafety(board, PieceColor.RED) * kingSafetyWeight);
-    const blackKingSafety = Math.round(this._evaluateKingSafety(board, PieceColor.BLACK) * kingSafetyWeight);
-    score += redKingSafety - blackKingSafety;
+    // King safety
+    score += this._evaluateKingSafety(allPieces, PieceColor.RED);
+    score -= this._evaluateKingSafety(allPieces, PieceColor.BLACK);
 
-    // Piece coordination
-    score += this._evaluatePieceCoordination(board, PieceColor.RED);
-    score -= this._evaluatePieceCoordination(board, PieceColor.BLACK);
+    // Threats (soldiers, horses near general, deep chariots, cannon endgame)
+    score += this._evaluateThreats(allPieces, totalPieceCount);
 
-    // Mobility (weighted less in opening, more in middlegame/endgame)
-    const mobilityWeight = 0.3 + (1 - phase) * 0.7;
-    const redMobility = this._evaluateMobility(board, PieceColor.RED);
-    const blackMobility = this._evaluateMobility(board, PieceColor.BLACK);
-    score += Math.round((redMobility - blackMobility) * mobilityWeight);
+    // Chariot activity (open file, home rank penalty)
+    score += this._evaluateChariotActivity(allPieces);
 
-    // Check bonus (at most one side can be in check)
-    if (currentPlayerInCheck) {
-      score += board.currentPlayer === PieceColor.RED ? -50 : 50;
-    } else if (board.isInCheck(PieceColor.opposite(board.currentPlayer))) {
-      score += board.currentPlayer === PieceColor.RED ? 50 : -50;
-    }
+    // Connected horses
+    score += this._evaluateHorseCoordination(allPieces);
+
+    // Check bonus
+    if (board.isInCheck(PieceColor.RED)) score -= 30;
+    if (board.isInCheck(PieceColor.BLACK)) score += 30;
 
     return score;
   }

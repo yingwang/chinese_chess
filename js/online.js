@@ -87,15 +87,16 @@ export class OnlineManager {
     // Setup presence
     this._setupPresence();
 
-    // Listen for opponent joining
+    // Listen for opponent joining (once only)
     const opponentColor = playerColor === 'red' ? 'black' : 'red';
-    this.gameRef.child(`players/${opponentColor}`).on('value', (snap) => {
-      if (snap.exists() && snap.val().uid) {
-        // Opponent joined
+    this._opponentJoined = false;
+    this.gameRef.child(`players/${opponentColor}/uid`).on('value', (snap) => {
+      if (snap.exists() && snap.val() && !this._opponentJoined) {
+        this._opponentJoined = true;
         this.gameRef.child('meta/status').set('playing');
-        if (this._onOpponentJoined) this._onOpponentJoined();
         this._setupMoveListener();
         this._setupOpponentPresence(opponentColor);
+        if (this._onOpponentJoined) this._onOpponentJoined();
       }
     });
 

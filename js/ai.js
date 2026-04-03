@@ -871,3 +871,73 @@ export class ChessAI {
     return this.transpositionTable.size();
   }
 }
+
+/**
+ * Benchmark: run AI on test positions and compare with Pikafish results.
+ * Call from browser console: runBenchmark()
+ */
+export async function runBenchmark(depth = 6) {
+  const pikafish = [
+    { fen: "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1",
+      desc: "Initial position", pk_move: "c3c4", pk_score: 27 },
+    { fen: "4ka3/4a4/4b4/9/9/9/4n4/4B4/4A4/3AK3R w - - 0 1",
+      desc: "Endgame: R vs N+A", pk_move: "i0i5", pk_score: 354 },
+    { fen: "r1bakab1r/9/1cn4c1/p1p1p1p1p/9/2P6/P3P1P1P/1C2C1N2/9/RNBAKAB1R w - - 0 1",
+      desc: "Opening cannon pin", pk_move: "b0c2", pk_score: 460 },
+    { fen: "r1bak4/4a4/2n1b4/p3p1R1p/2p6/6P2/P1P1P3P/2N1C4/4A4/1RBAK1B2 w - - 0 1",
+      desc: "Complex mid-game", pk_move: "b0b7", pk_score: 859 },
+    { fen: "3k1a3/4a4/b8/5R3/9/9/9/B3C4/4A4/4KA3 w - - 0 1",
+      desc: "R+C mate puzzle", pk_move: "f6d6", pk_score: "mate 7" },
+  ];
+
+  const ai = new ChessAI(depth, 30000);
+  const results = [];
+
+  console.log(`%c=== Chinese Chess AI Benchmark (depth ${depth}) ===`, 'font-weight:bold;font-size:14px');
+
+  for (const test of pikafish) {
+    console.log(`\n%c${test.desc}`, 'font-weight:bold');
+    console.log(`FEN: ${test.fen}`);
+
+    const board = Board.fromFen(test.fen);
+    ai.clearCache();
+
+    const start = performance.now();
+    const move = ai.findBestMove(board);
+    const elapsed = Math.round(performance.now() - start);
+
+    // Convert move to pikafish format (col-as-letter + row)
+    const colLetter = 'abcdefghi';
+    const myMove = move
+      ? `${colLetter[move.from.col]}${9 - move.from.row}${colLetter[move.to.col]}${9 - move.to.row}`
+      : 'none';
+
+    const match = myMove === test.pk_move ? '✅' : '❌';
+
+    console.log(`  Our AI:    ${myMove} (${elapsed}ms)`);
+    console.log(`  Pikafish:  ${test.pk_move} (score: ${test.pk_score})`);
+    console.log(`  Match: ${match}`);
+
+    results.push({ desc: test.desc, myMove, pkMove: test.pk_move, match: myMove === test.pk_move, time: elapsed });
+  }
+
+  console.log(`\n%c=== Summary ===`, 'font-weight:bold;font-size:14px');
+  const matched = results.filter(r => r.match).length;
+  console.table(results.map(r => ({
+    Position: r.desc,
+    'Our Move': r.myMove,
+    'Pikafish': r.pkMove,
+    Match: r.match ? '✅' : '❌',
+    'Time(ms)': r.time
+  })));
+  console.log(`Matched ${matched}/${results.length} moves with Pikafish (3000+ Elo)`);
+
+  return results;
+}
+
+// Expose to window for console access
+if (typeof window !== 'undefined') {
+  window.runBenchmark = runBenchmark;
+  window.Board = Board;
+  window.ChessAI = ChessAI;
+}

@@ -12,11 +12,12 @@ export class BoardView {
     this.cellSize = 0;
     this.offsetX = 0;
     this.offsetY = 0;
-    this.capturedByRed = [];   // pieces captured by red player
-    this.capturedByBlack = []; // pieces captured by black player
+    this.capturedByRed = [];
+    this.capturedByBlack = [];
     this.aiThinking = false;
     this._thinkingDots = 0;
     this._thinkingTimer = null;
+    this.theme = 'dark';
 
     this.canvas.addEventListener('click', (e) => this._handleClick(e));
     this.canvas.addEventListener('touchend', (e) => {
@@ -66,6 +67,11 @@ export class BoardView {
   resetCaptured() {
     this.capturedByRed = [];
     this.capturedByBlack = [];
+  }
+
+  setTheme(theme) {
+    this.theme = theme;
+    this.draw();
   }
 
   clearSelection() {
@@ -169,8 +175,8 @@ export class BoardView {
     const w = this.canvas.width / dpr;
     const h = this.canvas.height / dpr;
 
-    // Clear with dark background
-    ctx.fillStyle = '#1a1a2e';
+    // Clear with theme background
+    ctx.fillStyle = this.theme === 'light' ? 'rgba(240,236,228,0.85)' : '#1a1a2e';
     ctx.fillRect(0, 0, w, h);
 
     // Board background (only the board area)

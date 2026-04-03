@@ -374,6 +374,90 @@ export class Board {
     return board;
   }
 
+  /**
+   * Create a Board from a FEN string.
+   * FEN for Chinese chess: piece placement / active color
+   * Pieces: R=Chariot N=Horse B=Elephant A=Advisor K=General C=Cannon P=Soldier
+   * Uppercase = RED, lowercase = BLACK
+   */
+  static fromFen(fen) {
+    const board = new Board();
+    const parts = fen.split(' ');
+    const placement = parts[0];
+    const activeColor = parts.length > 1 ? parts[1] : 'w';
+
+    const fenToPiece = {
+      'r': { type: PieceType.CHARIOT, color: PieceColor.BLACK },
+      'n': { type: PieceType.HORSE, color: PieceColor.BLACK },
+      'b': { type: PieceType.ELEPHANT, color: PieceColor.BLACK },
+      'a': { type: PieceType.ADVISOR, color: PieceColor.BLACK },
+      'k': { type: PieceType.GENERAL, color: PieceColor.BLACK },
+      'c': { type: PieceType.CANNON, color: PieceColor.BLACK },
+      'p': { type: PieceType.SOLDIER, color: PieceColor.BLACK },
+      'R': { type: PieceType.CHARIOT, color: PieceColor.RED },
+      'N': { type: PieceType.HORSE, color: PieceColor.RED },
+      'B': { type: PieceType.ELEPHANT, color: PieceColor.RED },
+      'A': { type: PieceType.ADVISOR, color: PieceColor.RED },
+      'K': { type: PieceType.GENERAL, color: PieceColor.RED },
+      'C': { type: PieceType.CANNON, color: PieceColor.RED },
+      'P': { type: PieceType.SOLDIER, color: PieceColor.RED },
+    };
+
+    const rows = placement.split('/');
+    for (let row = 0; row < rows.length; row++) {
+      let col = 0;
+      for (const ch of rows[row]) {
+        if (ch >= '1' && ch <= '9') {
+          col += parseInt(ch);
+        } else if (fenToPiece[ch]) {
+          const { type, color } = fenToPiece[ch];
+          const pos = new Position(row, col);
+          board.pieces.set(pos.toString(), new Piece(type, color, pos));
+          col++;
+        }
+      }
+    }
+
+    board.currentPlayer = activeColor === 'b' ? PieceColor.BLACK : PieceColor.RED;
+    return board;
+  }
+
+  /**
+   * Convert board to FEN string.
+   */
+  toFen() {
+    const pieceToFen = new Map([
+      [PieceType.CHARIOT,  { red: 'R', black: 'r' }],
+      [PieceType.HORSE,    { red: 'N', black: 'n' }],
+      [PieceType.ELEPHANT, { red: 'B', black: 'b' }],
+      [PieceType.ADVISOR,  { red: 'A', black: 'a' }],
+      [PieceType.GENERAL,  { red: 'K', black: 'k' }],
+      [PieceType.CANNON,   { red: 'C', black: 'c' }],
+      [PieceType.SOLDIER,  { red: 'P', black: 'p' }],
+    ]);
+
+    const rows = [];
+    for (let row = 0; row < 10; row++) {
+      let rowStr = '';
+      let empty = 0;
+      for (let col = 0; col < 9; col++) {
+        const piece = this.getPiece(new Position(row, col));
+        if (piece) {
+          if (empty > 0) { rowStr += empty; empty = 0; }
+          const chars = pieceToFen.get(piece.type);
+          rowStr += piece.color === PieceColor.RED ? chars.red : chars.black;
+        } else {
+          empty++;
+        }
+      }
+      if (empty > 0) rowStr += empty;
+      rows.push(rowStr);
+    }
+
+    const color = this.currentPlayer === PieceColor.RED ? 'w' : 'b';
+    return rows.join('/') + ' ' + color + ' - - 0 1';
+  }
+
   getPiece(position) {
     return this.pieces.get(position.toString()) || null;
   }

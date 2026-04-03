@@ -55,6 +55,28 @@ let gameStartTime = null;
 let timerInterval = null;
 let isOnlineGame = false;
 
+// Theme
+const themeBtn = document.getElementById('theme-btn');
+const dialogThemeBtn = document.getElementById('dialog-theme-btn');
+let currentTheme = localStorage.getItem('xiangqi_theme') || 'dark';
+applyTheme(currentTheme);
+
+function applyTheme(theme) {
+    currentTheme = theme;
+    document.body.setAttribute('data-theme', theme);
+    const icon = theme === 'dark' ? '🌙' : '☀️';
+    themeBtn.textContent = icon;
+    dialogThemeBtn.textContent = icon;
+    localStorage.setItem('xiangqi_theme', theme);
+    boardView.setTheme(theme);
+}
+
+function toggleTheme() {
+    applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
+}
+themeBtn.addEventListener('click', toggleTheme);
+dialogThemeBtn.addEventListener('click', toggleTheme);
+
 // i18n
 const dialogLangBtn = document.getElementById('dialog-lang-btn');
 function updateLangButtons() {

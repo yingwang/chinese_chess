@@ -128,33 +128,38 @@ export class OnlineManager {
     this._listening = true;
     this.appliedMoveCount = 0;
 
-    this.gameRef.child('moves').on('child_added', (snap) => {
-      const idx = parseInt(snap.key);
-      // Only process moves we haven't applied yet
-      if (idx < this.appliedMoveCount) return;
+    // Use 'value' listener on entire moves node — more reliable than child_added
+    this.gameRef.child('moves').on('value', (snap) => {
+      const moves = snap.val();
+      if (!moves) return;
 
-      // Determine if this is our move or opponent's
-      // Even indices (0,2,4...) = Red's moves, odd (1,3,5...) = Black's
-      const moveColor = idx % 2 === 0 ? 'red' : 'black';
-      const isOurMove = moveColor === this.myColor;
+      // moves is an object like {0: {fromRow,...}, 1: {fromRow,...}, ...}
+      const keys = Object.keys(moves).map(Number).sort((a, b) => a - b);
 
-      if (isOurMove) {
-        // Our own move echoed back - just update count
+      // Process any moves we haven't applied yet
+      for (const idx of keys) {
+        if (idx < this.appliedMoveCount) continue;
+
+        // Is this our move or opponent's?
+        const moveColor = idx % 2 === 0 ? 'red' : 'black';
+        if (moveColor === this.myColor) {
+          // Our own move — just advance counter
+          this.appliedMoveCount = idx + 1;
+          continue;
+        }
+
+        // Opponent's move
+        const data = moves[idx];
+        if (!data) continue;
+
+        const from = new Position(data.fromRow, data.fromCol);
+        const to = new Position(data.toRow, data.toCol);
+        const move = new Move(from, to, null, null);
+
         this.appliedMoveCount = idx + 1;
-        return;
+        console.log(`Remote move: #${idx} (${data.fromRow},${data.fromCol})→(${data.toRow},${data.toCol})`);
+        if (this._onRemoteMove) this._onRemoteMove(move);
       }
-
-      // Opponent's move - apply it
-      const data = snap.val();
-      if (!data) return;
-
-      const from = new Position(data.fromRow, data.fromCol);
-      const to = new Position(data.toRow, data.toCol);
-      const move = new Move(from, to, null, null);
-
-      this.appliedMoveCount = idx + 1;
-      console.log(`Remote move received: ${idx} (${data.fromRow},${data.fromCol})→(${data.toRow},${data.toCol})`);
-      if (this._onRemoteMove) this._onRemoteMove(move);
     });
 
     // Listen for game result

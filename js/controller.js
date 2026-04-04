@@ -164,6 +164,14 @@ class GameController {
         return;
       }
 
+      // Avoid moves that would cause 3rd repetition (perpetual check = loss)
+      if (this._wouldCauseRepetition(move)) {
+        const legalMoves = this.board.getAllLegalMoves();
+        const safeMove = legalMoves.find(m => !this._wouldCauseRepetition(m));
+        if (safeMove) move = safeMove;
+        // If all moves cause repetition, just play the original (will be caught as draw/loss)
+      }
+
       this.board = this.board.makeMove(move);
       this.board.currentPlayer = PieceColor.opposite(this.board.currentPlayer);
       this.moveHistory.push(move);
@@ -214,6 +222,14 @@ class GameController {
     if (this.gameMode === GAME_MODE.ONLINE) return false;
     if (this.gameMode === GAME_MODE.AI_VS_AI) return true;
     return this.board.currentPlayer === this.aiColor;
+  }
+
+  _wouldCauseRepetition(move) {
+    const testBoard = this.board.makeMove(move);
+    testBoard.currentPlayer = PieceColor.opposite(testBoard.currentPlayer);
+    const hash = testBoard.getPositionHash();
+    const count = this.positionHashes.filter(h => h === hash).length;
+    return count >= 2; // would be the 3rd occurrence
   }
 
   checkGameOver() {

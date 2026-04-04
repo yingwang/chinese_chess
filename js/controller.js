@@ -27,6 +27,7 @@ class GameController {
     this.difficulty = AI_DIFFICULTY.PROFESSIONAL;
     this.ai = this._createAI(this.difficulty);
     this.moveHistory = [];
+    this.positionHashes = [];
     this.gameOver = false;
 
     // Callbacks set by UI
@@ -71,6 +72,7 @@ class GameController {
   startNewGame() {
     this.board = Board.createInitialBoard();
     this.moveHistory = [];
+    this.positionHashes = [this.board.getPositionHash()];
     this.gameOver = false;
     if (this.ai?.clearCache) this.ai.clearCache();
 
@@ -102,6 +104,7 @@ class GameController {
     this.board = this.board.makeMove(matched);
     this.board.currentPlayer = PieceColor.opposite(this.board.currentPlayer);
     this.moveHistory.push(matched);
+    this.positionHashes.push(this.board.getPositionHash());
 
     if (this.onMoveCompleted) this.onMoveCompleted(matched);
     if (this.onBoardUpdated) this.onBoardUpdated(this.board);
@@ -131,6 +134,7 @@ class GameController {
     this.board = this.board.makeMove(matched);
     this.board.currentPlayer = PieceColor.opposite(this.board.currentPlayer);
     this.moveHistory.push(matched);
+    this.positionHashes.push(this.board.getPositionHash());
 
     if (this.onMoveCompleted) this.onMoveCompleted(matched);
     if (this.onBoardUpdated) this.onBoardUpdated(this.board);
@@ -163,6 +167,7 @@ class GameController {
       this.board = this.board.makeMove(move);
       this.board.currentPlayer = PieceColor.opposite(this.board.currentPlayer);
       this.moveHistory.push(move);
+      this.positionHashes.push(this.board.getPositionHash());
 
       if (this.onMoveCompleted) this.onMoveCompleted(move);
       if (this.onBoardUpdated) this.onBoardUpdated(this.board);
@@ -185,9 +190,11 @@ class GameController {
     this.moveHistory.splice(-movesToUndo);
 
     this.board = Board.createInitialBoard();
+    this.positionHashes = [this.board.getPositionHash()];
     for (const move of this.moveHistory) {
       this.board = this.board.makeMove(move);
       this.board.currentPlayer = PieceColor.opposite(this.board.currentPlayer);
+      this.positionHashes.push(this.board.getPositionHash());
     }
 
     this.gameOver = false;
@@ -223,6 +230,28 @@ class GameController {
       this.gameOver = true;
       if (this.onGameOver) this.onGameOver(result);
       return true;
+    }
+
+    // Repetition detection: same position 3 times
+    const currentHash = this.positionHashes[this.positionHashes.length - 1];
+    const count = this.positionHashes.filter(h => h === currentHash).length;
+    if (count >= 3) {
+      // The side that just moved (opponent of currentPlayer) caused the repetition
+      const mover = PieceColor.opposite(this.board.currentPlayer);
+      if (this.board.isInCheck(this.board.currentPlayer)) {
+        // Current player is in check → mover is perpetually checking → mover loses
+        const winner = this.board.currentPlayer;
+        const result = { type: 'perpetualCheck', winner };
+        this.gameOver = true;
+        if (this.onGameOver) this.onGameOver(result);
+        return true;
+      } else {
+        // No check → draw by repetition
+        const result = { type: 'repetition' };
+        this.gameOver = true;
+        if (this.onGameOver) this.onGameOver(result);
+        return true;
+      }
     }
 
     return false;

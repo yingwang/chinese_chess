@@ -906,7 +906,7 @@ export async function runBenchmark(depth = 6) {
     // Pass fake history length > 8 to skip opening book
     const fakeHistory = new Array(10).fill(null);
     const start = performance.now();
-    const move = ai.findBestMove(board, fakeHistory);
+    const move = await ai.findBestMove(board, fakeHistory);
     const elapsed = Math.round(performance.now() - start);
 
     // Convert move to pikafish format: col letter (a-i) + row (0=red side, 9=black side)

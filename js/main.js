@@ -290,21 +290,21 @@ function updateMoveHistory() {
 function showGameOverDialog(result) {
     if (isOnlineGame) {
         const myColor = controller.myColor;
-        if (result.type === 'checkmate') {
+        if (result.type === 'checkmate' || result.type === 'perpetualCheck') {
             const iWin = result.winner === myColor;
             gameOverTitle.textContent = iWin ? t('youWin') : t('youLose');
-            gameOverMessage.textContent = t('checkmate');
+            gameOverMessage.textContent = result.type === 'perpetualCheck' ? t('perpetualCheck') : t('checkmate');
         } else {
             gameOverTitle.textContent = t('draw');
-            gameOverMessage.textContent = t('stalemate');
+            gameOverMessage.textContent = result.type === 'repetition' ? t('repetitionDraw') : t('stalemate');
         }
     } else {
-        if (result.type === 'checkmate') {
+        if (result.type === 'checkmate' || result.type === 'perpetualCheck') {
             gameOverTitle.textContent = result.winner === PieceColor.RED ? t('redWins') : t('blackWins');
-            gameOverMessage.textContent = t('checkmate');
+            gameOverMessage.textContent = result.type === 'perpetualCheck' ? t('perpetualCheck') : t('checkmate');
         } else {
             gameOverTitle.textContent = t('draw');
-            gameOverMessage.textContent = t('stalemate');
+            gameOverMessage.textContent = result.type === 'repetition' ? t('repetitionDraw') : t('stalemate');
         }
     }
     gameOverDialog.classList.remove('hidden');

@@ -55,9 +55,15 @@ Real-time online play powered by Firebase. Create a room, share the 4-character 
 
 ### Neural Network AI / 神经网络 AI
 
-AlphaZero-style ResNet (128 filters, 6 residual blocks) with dual policy + value heads, trained on 40,000+ master game records. Runs in-browser via ONNX Runtime Web (WebAssembly).
+AlphaZero-style ResNet (128 filters, 6 residual blocks) with dual policy + value heads. Pre-trained on 40,000+ master game records, then refined through self-play reinforcement learning (20 iterations). Runs in-browser via ONNX Runtime Web (WebAssembly).
 
-基于 AlphaZero 架构的 ResNet（128 滤波器，6 残差块），双头：策略头 + 价值头。使用 4 万+ 大师棋谱训练，通过 ONNX Runtime Web（WebAssembly）在浏览器端运行。
+基于 AlphaZero 架构的 ResNet（128 滤波器，6 残差块），双头：策略头 + 价值头。使用 4 万+ 大师棋谱预训练，再通过自我对弈强化学习精炼（20 轮迭代）。通过 ONNX Runtime Web（WebAssembly）在浏览器端运行。
+
+### Rules Enforcement / 规则检测
+
+- **Perpetual check detection / 长将检测** — Perpetual check (same position 3 times with check) results in loss for the checking side / 同一局面出现3次且处于将军状态，长将方判负
+- **Threefold repetition draw / 三次重复和棋** — Same position 3 times without check is a draw / 同一局面出现3次（无将军）判和棋
+- **AI avoidance / AI 规避** — AI proactively avoids moves that would cause repetition penalties / AI 主动规避会导致判负的重复走法
 
 ### Other Features / 其他功能
 

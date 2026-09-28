@@ -2,10 +2,14 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>中国象棋 - Chinese Chess</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        /* Phones: a quick second tap that misses a button would double-tap-zoom the page, and
+           the board (touch-action: none) then swallows the pinch that should undo it. iOS
+           ignores user-scalable=no, so switch double-tap zoom off here; pinch still works. */
+        html, body { touch-action: manipulation; }
 
         /* Theme variables */
         :root {
@@ -208,7 +212,8 @@
             border: 1px solid var(--input-border);
             border-radius: 6px;
             padding: 6px 10px;
-            font-size: 0.95em;
+            /* Below 16px, iOS zooms the page in when the menu opens and leaves it zoomed. */
+            font-size: 16px;
             font-family: inherit;
             flex: 1;
         }

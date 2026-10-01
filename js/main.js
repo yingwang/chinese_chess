@@ -108,6 +108,7 @@ boardView.setOnMoveListener((move) => {
 });
 
 controller.onBoardUpdated = (board) => {
+    boardView.setHistory(controller.getMoveHistory());
     boardView.setBoard(board);
     if (!aiThinking) updateStatus();
 };
@@ -354,7 +355,6 @@ startGameBtn.addEventListener('click', () => {
     newGameDialog.classList.add('hidden');
     infoPanel.classList.remove('hidden');
     moveHistoryEl.innerHTML = '';
-    boardView.resetCaptured();
     startTimer();
     updateStatus();
     soundManager.startBackgroundMusic();
@@ -383,7 +383,6 @@ createGameBtn.addEventListener('click', async () => {
         isOnlineGame = true;
         controller.setGameMode(GAME_MODE.ONLINE);
         controller.setOnlineColor(PieceColor.RED);
-        boardView.resetCaptured();
         moveHistoryEl.innerHTML = '';
     } catch (e) {
         console.error('Create game failed:', e);
@@ -435,7 +434,6 @@ confirmJoinBtn.addEventListener('click', async () => {
 
         onlineDialog.classList.add('hidden');
         infoPanel.classList.remove('hidden');
-        boardView.resetCaptured();
         moveHistoryEl.innerHTML = '';
         startTimer();
         updateStatus();

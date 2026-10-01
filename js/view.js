@@ -1,5 +1,13 @@
 import { Position, PieceColor } from './model.js';
 
+// Layout, in cells. Around the grid is the board's wooden rim; above and below the rim, each side
+// has a tray for the pieces it has taken. The page's #game-container keeps the same proportions.
+const BOARD_PAD = 0.5;
+const SIDE_PAD = 1.1;
+const TRAY_GAP = 0.12;
+const CAPTURED_R = 0.27;
+const END_PAD = BOARD_PAD + TRAY_GAP + CAPTURED_R * 2 + 0.09;
+
 export class BoardView {
   constructor(canvasElement) {
     this.canvas = canvasElement;
@@ -40,14 +48,20 @@ export class BoardView {
 
   highlightMove(move) {
     this.lastMove = move;
-    if (move && move.capturedPiece) {
-      if (move.piece.color === PieceColor.RED) {
-        this.capturedByRed.push(move.capturedPiece);
-      } else {
-        this.capturedByBlack.push(move.capturedPiece);
-      }
-    }
     this.draw();
+  }
+
+  // Taken pieces and the last move come from the game's moves, so an undo or a new game puts the
+  // trays back as they were.
+  setHistory(moves) {
+    this.lastMove = moves.length ? moves[moves.length - 1] : null;
+    this.capturedByRed = [];
+    this.capturedByBlack = [];
+    for (const move of moves) {
+      if (!move.capturedPiece) continue;
+      if (move.piece.color === PieceColor.RED) this.capturedByRed.push(move.capturedPiece);
+      else this.capturedByBlack.push(move.capturedPiece);
+    }
   }
 
   setAIThinking(thinking) {
@@ -64,11 +78,6 @@ export class BoardView {
     this.draw();
   }
 
-  resetCaptured() {
-    this.capturedByRed = [];
-    this.capturedByBlack = [];
-  }
-
   setTheme(theme) {
     this.theme = theme;
     this.draw();
@@ -82,7 +91,7 @@ export class BoardView {
   resize() {
     const container = this.canvas.parentElement;
     const w = container.clientWidth;
-    const h = container.clientHeight || Math.round(w * 10 / 9);
+    const h = container.clientHeight || Math.round(w * (9 + END_PAD * 2) / (8 + SIDE_PAD * 2));
     const dpr = window.devicePixelRatio || 1;
     this.canvas.width = w * dpr;
     this.canvas.height = h * dpr;
@@ -90,9 +99,8 @@ export class BoardView {
     this.canvas.style.height = h + 'px';
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Calculate cell size with padding for pieces at edges
-    const padFactor = 1.1; // extra space around the board for pieces
-    this.cellSize = Math.min(w / (8 + padFactor * 2), h / (9 + padFactor * 2));
+    // Room around the grid for the pieces on its edges, and above and below it for the trays
+    this.cellSize = Math.min(w / (8 + SIDE_PAD * 2), h / (9 + END_PAD * 2));
     this.offsetX = (w - this.cellSize * 8) / 2;
     this.offsetY = (h - this.cellSize * 9) / 2;
     this.draw();
@@ -183,7 +191,7 @@ export class BoardView {
     // Board background with shadow and rounded border
     const topLeft = this._toPixel(0, 0);
     const bottomRight = this._toPixel(9, 8);
-    const pad = this.cellSize * 0.5;
+    const pad = this.cellSize * BOARD_PAD;
     const bx = topLeft.x - pad, by = topLeft.y - pad;
     const bw = bottomRight.x - topLeft.x + pad * 2;
     const bh = bottomRight.y - topLeft.y + pad * 2;
@@ -505,51 +513,64 @@ export class BoardView {
     ctx.fillText(displayName, x, y + 1);
   }
 
+  // The y of a side's tray: Black's above the board, Red's below.
+  _trayY(red) {
+    const fromGrid = this.cellSize * (BOARD_PAD + TRAY_GAP + CAPTURED_R);
+    return red ? this._toPixel(9, 0).y + fromGrid : this._toPixel(0, 0).y - fromGrid;
+  }
+
   _drawCaptured() {
+    this._drawCapturedRow(this.capturedByBlack, this._trayY(false));
+    this._drawCapturedRow(this.capturedByRed, this._trayY(true));
+  }
+
+  // Most valuable first, as on the phone app. A long row draws its pieces closer together, short
+  // of the far end, where the thinking dots go.
+  _drawCapturedRow(pieces, y) {
+    if (pieces.length === 0) return;
     const ctx = this.ctx;
-    const r = this.cellSize * 0.22;
-    const topLeft = this._toPixel(0, 0);
-    const bottomRight = this._toPixel(9, 8);
-    const pad = this.cellSize * 0.5;
+    const r = this.cellSize * CAPTURED_R;
+    const left = this._toPixel(0, 0).x - this.cellSize * BOARD_PAD;
+    const room = this.cellSize * (8 + BOARD_PAD * 2) - 48 - r * 2;
+    const step = pieces.length > 1 ? Math.min(r * 2.25, room / (pieces.length - 1)) : 0;
+    const sorted = [...pieces].sort((a, b) => b.type.baseValue - a.type.baseValue);
 
-    // Black's captured pieces (shown above board)
-    const blackY = topLeft.y - pad - r - 4;
-    this._drawCapturedRow(ctx, this.capturedByBlack, topLeft.x, blackY, r);
-
-    // Red's captured pieces (shown below board)
-    const redY = bottomRight.y + pad + r + 4;
-    this._drawCapturedRow(ctx, this.capturedByRed, topLeft.x, redY, r);
+    ctx.font = `bold ${r * 1.15}px "Noto Serif SC", "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    sorted.forEach((piece, i) => {
+      const x = left + r + i * step;
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+      ctx.shadowBlur = 3;
+      ctx.shadowOffsetY = 1;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgb(239, 230, 211)';
+      ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = 'rgb(142, 130, 102)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = piece.color === PieceColor.RED ? 'rgb(180, 30, 30)' : 'rgb(25, 25, 25)';
+      ctx.fillText(piece.type.getDisplayName(piece.color), x, y + 1);
+    });
   }
 
-  _drawCapturedRow(ctx, pieces, startX, y, r) {
-    for (let i = 0; i < pieces.length; i++) {
-      const x = startX + i * (r * 2.2);
-      const piece = pieces[i];
-      const name = piece.type.getDisplayName(piece.color);
-      ctx.fillStyle = piece.color === PieceColor.RED ? 'rgba(200, 40, 40, 0.6)' : 'rgba(100, 100, 100, 0.6)';
-      ctx.font = `bold ${r * 1.6}px "Noto Sans CJK SC", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(name, x, y);
-    }
-  }
-
+  // In the tray of the side that is thinking, at the far end from its taken pieces.
   _drawThinking() {
     const ctx = this.ctx;
-    const dpr = window.devicePixelRatio || 1;
-    const w = this.canvas.width / dpr;
-    const centerX = w / 2;
-    const topLeft = this._toPixel(0, 0);
-    const y = topLeft.y - this.cellSize * 0.5 - 24;
+    const y = this._trayY(this.board.currentPlayer === PieceColor.RED);
+    const right = this._toPixel(0, 8).x + this.cellSize * BOARD_PAD;
     const dotR = 4;
     const gap = 14;
 
     for (let i = 0; i < 3; i++) {
-      const x = centerX + (i - 1) * gap;
+      const x = right - dotR - 2 - (2 - i) * gap;
       const alpha = i < this._thinkingDots ? 1.0 : 0.3;
       ctx.beginPath();
       ctx.arc(x, y, dotR, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`;
+      ctx.fillStyle = this.theme === 'light' ? `rgba(139, 69, 19, ${alpha})` : `rgba(255, 215, 0, ${alpha})`;
       ctx.fill();
     }
   }

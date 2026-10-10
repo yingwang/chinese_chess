@@ -171,6 +171,7 @@ onlineManager.onOpponentJoined(() => {
     onlineDialog.classList.add('hidden');
     infoPanel.classList.remove('hidden');
     controller.startNewGame();
+    boardView.setFlipped(isOnlineGame && controller.myColor === PieceColor.BLACK);
     onlineManager.startListening(); // AFTER startNewGame to avoid race
     startTimer();
     updateResignButton();
@@ -397,6 +398,7 @@ startGameBtn.addEventListener('click', () => {
     controller.setGameMode(mode, aiColor);
     if (difficulty) controller.setDifficulty(difficulty);
     controller.startNewGame();
+    boardView.setFlipped(isOnlineGame && controller.myColor === PieceColor.BLACK);
 
     newGameDialog.classList.add('hidden');
     infoPanel.classList.remove('hidden');
@@ -477,6 +479,7 @@ confirmJoinBtn.addEventListener('click', async () => {
         controller.setGameMode(GAME_MODE.ONLINE);
         controller.setOnlineColor(myPieceColor);
         controller.startNewGame();
+    boardView.setFlipped(isOnlineGame && controller.myColor === PieceColor.BLACK);
         onlineManager.startListening(); // AFTER startNewGame
 
         onlineDialog.classList.add('hidden');
@@ -532,6 +535,7 @@ resizeCanvas();
 // === Init ===
 
 controller.startNewGame();
+    boardView.setFlipped(isOnlineGame && controller.myColor === PieceColor.BLACK);
 showNewGameDialog();
 statusEl.textContent = t('selectSettings');
 

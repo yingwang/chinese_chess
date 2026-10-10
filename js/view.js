@@ -26,6 +26,8 @@ export class BoardView {
     this._thinkingDots = 0;
     this._thinkingTimer = null;
     this.theme = 'dark';
+    // Online as Black: the board is turned round so the player's own pieces are at the bottom.
+    this.flipped = false;
 
     this.canvas.addEventListener('click', (e) => this._handleClick(e));
     this.canvas.addEventListener('touchend', (e) => {
@@ -108,16 +110,25 @@ export class BoardView {
 
   // Convert board position to canvas pixel coordinates
   _toPixel(row, col) {
+    if (this.flipped) { row = 9 - row; col = 8 - col; }
     return {
       x: this.offsetX + col * this.cellSize,
       y: this.offsetY + row * this.cellSize
     };
   }
 
+  setFlipped(flipped) {
+    flipped = !!flipped;
+    if (flipped === this.flipped) return;
+    this.flipped = flipped;
+    this.draw();
+  }
+
   // Convert canvas pixel coordinates to nearest board position
   _toPosition(px, py) {
-    const col = Math.round((px - this.offsetX) / this.cellSize);
-    const row = Math.round((py - this.offsetY) / this.cellSize);
+    let col = Math.round((px - this.offsetX) / this.cellSize);
+    let row = Math.round((py - this.offsetY) / this.cellSize);
+    if (this.flipped) { row = 9 - row; col = 8 - col; }
     const pos = new Position(row, col);
     if (!pos.isValid()) return null;
     // Check if click is close enough to the intersection
@@ -189,8 +200,9 @@ export class BoardView {
     ctx.fillRect(0, 0, w, h);
 
     // Board background with shadow and rounded border
-    const topLeft = this._toPixel(0, 0);
-    const bottomRight = this._toPixel(9, 8);
+    // Screen corners, not board squares: the frame is the same whichever way the board faces.
+    const topLeft = { x: this.offsetX, y: this.offsetY };
+    const bottomRight = { x: this.offsetX + 8 * this.cellSize, y: this.offsetY + 9 * this.cellSize };
     const pad = this.cellSize * BOARD_PAD;
     const bx = topLeft.x - pad, by = topLeft.y - pad;
     const bw = bottomRight.x - topLeft.x + pad * 2;
@@ -292,8 +304,9 @@ export class BoardView {
     }
 
     // Border
-    const topLeft = this._toPixel(0, 0);
-    const bottomRight = this._toPixel(9, 8);
+    // Screen corners, not board squares: the frame is the same whichever way the board faces.
+    const topLeft = { x: this.offsetX, y: this.offsetY };
+    const bottomRight = { x: this.offsetX + 8 * this.cellSize, y: this.offsetY + 9 * this.cellSize };
     const pad = this.cellSize * 0.06;
     ctx.strokeStyle = 'rgb(60, 40, 20)';
     ctx.lineWidth = 3;
@@ -335,8 +348,9 @@ export class BoardView {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    const leftX = this._toPixel(0, 2).x;
-    const rightX = this._toPixel(0, 6).x;
+    // Unflipped columns, so 楚河 stays on the left and 漢界 on the right whichever way the board faces.
+    const leftX = this.offsetX + 2 * this.cellSize;
+    const rightX = this.offsetX + 6 * this.cellSize;
     ctx.fillText('楚河', leftX, midY);
     ctx.fillText('漢界', rightX, midY);
   }
@@ -513,10 +527,12 @@ export class BoardView {
     ctx.fillText(displayName, x, y + 1);
   }
 
-  // The y of a side's tray: Black's above the board, Red's below.
+  // The y of a side's tray: Black's above the board, Red's below (the other way round when flipped).
   _trayY(red) {
     const fromGrid = this.cellSize * (BOARD_PAD + TRAY_GAP + CAPTURED_R);
-    return red ? this._toPixel(9, 0).y + fromGrid : this._toPixel(0, 0).y - fromGrid;
+    // The side at the bottom of the screen has its tray below the board: Red, unless flipped.
+    const bottom = red !== this.flipped;
+    return bottom ? this.offsetY + 9 * this.cellSize + fromGrid : this.offsetY - fromGrid;
   }
 
   _drawCaptured() {
@@ -530,7 +546,7 @@ export class BoardView {
     if (pieces.length === 0) return;
     const ctx = this.ctx;
     const r = this.cellSize * CAPTURED_R;
-    const left = this._toPixel(0, 0).x - this.cellSize * BOARD_PAD;
+    const left = this.offsetX - this.cellSize * BOARD_PAD;
     const room = this.cellSize * (8 + BOARD_PAD * 2) - 48 - r * 2;
     const step = pieces.length > 1 ? Math.min(r * 2.25, room / (pieces.length - 1)) : 0;
     const sorted = [...pieces].sort((a, b) => b.type.baseValue - a.type.baseValue);
@@ -561,7 +577,7 @@ export class BoardView {
   _drawThinking() {
     const ctx = this.ctx;
     const y = this._trayY(this.board.currentPlayer === PieceColor.RED);
-    const right = this._toPixel(0, 8).x + this.cellSize * BOARD_PAD;
+    const right = this.offsetX + 8 * this.cellSize + this.cellSize * BOARD_PAD;
     const dotR = 4;
     const gap = 14;
 

@@ -20,9 +20,9 @@ A Chinese Chess (Xiangqi) game for the web with AI engine, neural network AI, an
 
 ### Online Multiplayer / 在线对战
 
-Real-time online play powered by Firebase. Create a room, share the 4-character code with a friend, and play from any device.
+Real-time online play powered by Firebase. Create a room, share the 6-character code (or a link with it) with a friend, and play from any device, including the Android app.
 
-基于 Firebase 的实时在线对战。创建房间，把 4 位房间号分享给朋友，任何设备都能玩。
+基于 Firebase 的实时在线对战。创建房间，把 6 位房间号（或带房间号的链接）分享给朋友，任何设备都能玩，也能和 Android 版互通。
 
 - Room code sharing / 房间号分享
 - Real-time move sync / 实时走法同步

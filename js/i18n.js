@@ -60,6 +60,12 @@ const translations = {
     invalidCode: '无效房间号',
     gameFull: '房间已满',
     connecting: '连接中...',
+    gameFinished: '这一局已经结束',
+    resignConfirm: '确定认输吗？',
+    youResigned: '你认输了',
+    leaveOnlineConfirm: '对局还在进行，离开就算认输。确定吗？',
+    redShort: '红',
+    blackShort: '黑',
   },
   en: {
     title: 'Chinese Chess',
@@ -122,6 +128,12 @@ const translations = {
     invalidCode: 'Invalid room code',
     gameFull: 'Room is full',
     connecting: 'Connecting...',
+    gameFinished: 'That game has finished',
+    resignConfirm: 'Resign this game?',
+    youResigned: 'You resigned',
+    leaveOnlineConfirm: 'The game is still on; leaving resigns it. Leave?',
+    redShort: 'Red',
+    blackShort: 'Black',
   }
 };
 

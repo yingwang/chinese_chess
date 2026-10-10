@@ -2,7 +2,7 @@ import { PieceColor, PieceType } from './model.js';
 import { GameController, AI_DIFFICULTY, GAME_MODE } from './controller.js';
 import { BoardView } from './view.js';
 import { SoundManager } from './audio.js';
-import { OnlineManager } from './online.js';
+import { OnlineManager, CODE_LENGTH, normalizeCode, isValidCode } from './online.js';
 import { t, toggleLang, getLang } from './i18n.js';
 
 // DOM elements
@@ -28,6 +28,7 @@ const gameOverNewGameBtn = document.getElementById('game-over-new-game-btn');
 const elapsedTimeEl = document.getElementById('elapsed-time');
 const moveHistoryEl = document.getElementById('move-history');
 const infoPanel = document.getElementById('info-panel');
+const resignBtn = document.getElementById('resign-btn');
 
 // Online dialog elements
 const onlineDialog = document.getElementById('online-dialog');
@@ -141,10 +142,13 @@ controller.onAIThinking = (thinking) => {
 controller.onGameOver = (result) => {
     stopTimer();
     if (isOnlineGame) {
-        onlineManager.sendGameResult({
+        // Deferred: when our own move ends the game, the move is sent first (right after
+        // makePlayerMove returns); the database takes no move once a result is in.
+        setTimeout(() => onlineManager.sendGameResult({
             type: result.type,
             winner: result.winner === PieceColor.RED ? 'red' : (result.winner === PieceColor.BLACK ? 'black' : null)
-        });
+        }), 0);
+        updateResignButton();
     }
     showGameOverDialog(result);
 };
@@ -169,6 +173,7 @@ onlineManager.onOpponentJoined(() => {
     controller.startNewGame();
     onlineManager.startListening(); // AFTER startNewGame to avoid race
     startTimer();
+    updateResignButton();
     updateStatus();
     soundManager.startBackgroundMusic();
     statusEl.textContent = t('opponentJoined');
@@ -187,15 +192,40 @@ onlineManager.onOpponentConnection((connected) => {
 
 onlineManager.onGameResult((result) => {
     if (controller.gameOver) return;
-    if (result.type === 'resign') {
-        controller.gameOver = true;
-        const iWin = (result.winner === 'red' && controller.myColor === PieceColor.RED) ||
-                     (result.winner === 'black' && controller.myColor === PieceColor.BLACK);
-        gameOverTitle.textContent = iWin ? t('youWin') : t('youLose');
-        gameOverMessage.textContent = t('opponentResigned');
-        gameOverDialog.classList.remove('hidden');
-        stopTimer();
-    }
+    // A resignation, or a result the other side reached before this board did.
+    controller.gameOver = true;
+    if (onlineManager.endedAt == null) onlineManager.endedAt = onlineManager.serverNow();
+    const iWin = (result.winner === 'red' && controller.myColor === PieceColor.RED) ||
+                 (result.winner === 'black' && controller.myColor === PieceColor.BLACK);
+    gameOverTitle.textContent = !result.winner ? t('draw') : (iWin ? t('youWin') : t('youLose'));
+    const reasons = {
+        resign: t('opponentResigned'), checkmate: t('checkmate'), perpetualCheck: t('perpetualCheck'),
+        stalemate: t('stalemate'), repetition: t('repetitionDraw'),
+    };
+    gameOverMessage.textContent = reasons[result.type] || '';
+    gameOverDialog.classList.remove('hidden');
+    stopTimer();
+    updateTimer();
+    updateResignButton();
+});
+
+// === Resign (online) ===
+
+function updateResignButton() {
+    resignBtn.classList.toggle('hidden', !isOnlineGame || controller.gameOver);
+}
+
+resignBtn.addEventListener('click', () => {
+    if (!isOnlineGame || controller.gameOver) return;
+    if (!confirm(t('resignConfirm'))) return;
+    controller.gameOver = true;
+    onlineManager.resign();
+    stopTimer();
+    updateTimer();
+    updateResignButton();
+    gameOverTitle.textContent = t('youLose');
+    gameOverMessage.textContent = t('youResigned');
+    gameOverDialog.classList.remove('hidden');
 });
 
 // === Status ===
@@ -235,12 +265,22 @@ function stopTimer() {
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 }
 
+function formatClock(ms) {
+    const total = Math.floor(Math.max(0, ms) / 1000);
+    const minutes = String(Math.floor(total / 60)).padStart(2, '0');
+    const seconds = String(total % 60).padStart(2, '0');
+    return minutes + ':' + seconds;
+}
+
 function updateTimer() {
+    if (isOnlineGame) {
+        // Each side's time from the server's move times: the same on both screens.
+        const { red, black } = onlineManager.getClocks(controller.gameOver);
+        elapsedTimeEl.textContent = `${t('redShort')} ${formatClock(red)} · ${t('blackShort')} ${formatClock(black)}`;
+        return;
+    }
     if (!gameStartTime) return;
-    const elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
-    const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
-    const seconds = String(elapsed % 60).padStart(2, '0');
-    elapsedTimeEl.textContent = minutes + ':' + seconds;
+    elapsedTimeEl.textContent = formatClock(Date.now() - gameStartTime);
 }
 
 // === Notation ===
@@ -315,8 +355,14 @@ function showGameOverDialog(result) {
 
 function showNewGameDialog() {
     if (isOnlineGame) {
-        onlineManager.cleanup();
+        // Leaving a game still being played resigns it; the opponent is not left waiting.
+        const live = !controller.gameOver;
+        if (live && !confirm(t('leaveOnlineConfirm'))) return;
+        if (live) { controller.gameOver = true; onlineManager.resign(); }
+        onlineManager.leave(!live);
         isOnlineGame = false;
+        stopTimer();
+        updateResignButton();
     }
     updateDialogVisibility();
     newGameDialog.classList.remove('hidden');
@@ -401,7 +447,8 @@ copyCodeBtn.addEventListener('click', () => {
 });
 
 cancelOnlineBtn.addEventListener('click', () => {
-    onlineManager.cleanup();
+    // Nobody joined: the room is deleted.
+    onlineManager.leave(false);
     isOnlineGame = false;
     onlineDialog.classList.add('hidden');
 });
@@ -415,8 +462,8 @@ joinGameBtn.addEventListener('click', () => {
 });
 
 confirmJoinBtn.addEventListener('click', async () => {
-    const code = joinCodeInput.value.trim().toUpperCase();
-    if (code.length !== 4) {
+    const code = normalizeCode(joinCodeInput.value);
+    if (!isValidCode(code)) {
         joinError.textContent = t('invalidCode');
         return;
     }
@@ -436,12 +483,14 @@ confirmJoinBtn.addEventListener('click', async () => {
         infoPanel.classList.remove('hidden');
         moveHistoryEl.innerHTML = '';
         startTimer();
+        updateResignButton();
         updateStatus();
         soundManager.startBackgroundMusic();
     } catch (e) {
         console.error('Join game failed:', e);
         if (e.message === 'INVALID_CODE') joinError.textContent = t('invalidCode');
         else if (e.message === 'GAME_FULL') joinError.textContent = t('gameFull');
+        else if (e.message === 'GAME_FINISHED') joinError.textContent = t('gameFinished');
         else joinError.textContent = e.message;
     }
 });
@@ -485,3 +534,15 @@ resizeCanvas();
 controller.startNewGame();
 showNewGameDialog();
 statusEl.textContent = t('selectSettings');
+
+// A shared link (?room=CODE, from the Android app's share sheet) opens the join form with the
+// code filled in; joining is still the player's tap.
+const sharedCode = normalizeCode(new URLSearchParams(location.search).get('room'));
+if (isValidCode(sharedCode)) {
+    newGameDialog.classList.add('hidden');
+    showOnlineDialog();
+    onlineMenu.style.display = 'none';
+    onlineJoin.style.display = '';
+    joinCodeInput.value = sharedCode;
+}
+joinCodeInput.maxLength = CODE_LENGTH + 2;

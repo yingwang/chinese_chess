@@ -1,0 +1,17 @@
+{
+  "rules": {
+    "games": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && (!data.exists() || data.child('players/red/uid').val() == auth.uid || data.child('players/black/uid').val() == auth.uid)",
+        "players": {
+          "$color": {
+            "uid": {
+              ".validate": "newData.val() == auth.uid"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -5,12 +5,30 @@
 import { firebaseConfig } from './firebase-config.js';
 import { Position, Move, PieceColor } from './model.js';
 
+// No I, L, O, 0 or 1. The Android app (online/OnlineProtocol.kt) uses the same alphabet and length,
+// and the database rules accept only codes of this shape.
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+export const CODE_LENGTH = 6;
 
 function generateCode() {
+  const bytes = new Uint32Array(CODE_LENGTH);
+  crypto.getRandomValues(bytes);
   let code = '';
-  for (let i = 0; i < 4; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  for (let i = 0; i < CODE_LENGTH; i++) code += CODE_CHARS[bytes[i] % CODE_CHARS.length];
   return code;
+}
+
+/** What was typed, upper-cased, without the spaces or dashes people add when reading it out. */
+export function normalizeCode(input) {
+  return (input || '').toUpperCase().replace(/[\s-]/g, '');
+}
+
+export function isValidCode(code) {
+  return code.length === CODE_LENGTH && [...code].every(c => CODE_CHARS.includes(c));
+}
+
+function isPermissionDenied(e) {
+  return /permission/i.test((e && (e.code || e.message)) || '');
 }
 
 export class OnlineManager {
@@ -29,6 +47,13 @@ export class OnlineManager {
     this._onGameResult = null;
     this._listening = false;
     this._opponentJoined = false;
+    // Clocks: when the game started and when each move was written, by the server's clock.
+    this.startedAt = null;
+    this.moveTimes = [];
+    this.serverOffset = 0;
+    this.endedAt = null;
+    this._offsetListener = null;
+    this._opponentConnected = null;
   }
 
   async initialize() {
@@ -40,7 +65,12 @@ export class OnlineManager {
     const result = await this.auth.signInAnonymously();
     this.uid = result.user.uid;
     console.log('Firebase auth:', this.uid);
+    this._offsetListener = this.db.ref('.info/serverTimeOffset').on('value', (snap) => {
+      this.serverOffset = snap.val() || 0;
+    });
   }
+
+  serverNow() { return Date.now() + this.serverOffset; }
 
   async createGame(playerColor = 'red') {
     await this.initialize();
@@ -63,6 +93,8 @@ export class OnlineManager {
         createdAt: firebase.database.ServerValue.TIMESTAMP,
         status: 'waiting',
         gameCode: code,
+        // Tells a joiner which seat is free: only the meta of a room is readable before joining.
+        hostColor: playerColor,
       },
       players: {
         [playerColor]: { uid: this.uid, connected: true }
@@ -77,7 +109,8 @@ export class OnlineManager {
     this.gameRef.child(`players/${opponentColor}/uid`).on('value', (snap) => {
       if (snap.exists() && snap.val() && !this._opponentJoined) {
         this._opponentJoined = true;
-        this.gameRef.child('meta/status').set('playing');
+        // The joiner has set this already; repeated in case it was cut off in between.
+        this.gameRef.child('meta/status').set('playing').catch(() => {});
         this._setupOpponentPresence(opponentColor);
         if (this._onOpponentJoined) this._onOpponentJoined();
       }
@@ -91,28 +124,40 @@ export class OnlineManager {
     await this.initialize();
     this.cleanup();
 
-    code = code.toUpperCase().trim();
+    code = normalizeCode(code);
     this.gameRef = this.db.ref(`games/${code}`);
 
-    const snap = await this.gameRef.once('value');
-    if (!snap.exists()) throw new Error('INVALID_CODE');
+    // Before taking a seat only the room's meta can be read (database.rules.json): whether it is
+    // waiting, and which side the host took.
+    const metaSnap = await this.gameRef.child('meta').once('value');
+    if (!metaSnap.exists()) { this.gameRef = null; throw new Error('INVALID_CODE'); }
+    const meta = metaSnap.val();
+    if (meta.status === 'finished') { this.gameRef = null; throw new Error('GAME_FINISHED'); }
+    if (meta.status !== 'waiting') { this.gameRef = null; throw new Error('GAME_FULL'); }
 
-    const data = snap.val();
-    if (data.meta?.status === 'finished') throw new Error('GAME_FINISHED');
-
-    let myColor;
-    if (!data.players?.red?.uid) myColor = 'red';
-    else if (!data.players?.black?.uid) myColor = 'black';
-    else throw new Error('GAME_FULL');
+    const myColor = meta.hostColor === 'black' ? 'red' : 'black';
 
     this.gameCode = code;
     this.myColor = myColor;
     this.appliedMoveCount = 0;
 
-    await this.gameRef.child(`players/${myColor}`).set({
-      uid: this.uid, connected: true
+    try {
+      await this.gameRef.child(`players/${myColor}`).set({
+        uid: this.uid, connected: true
+      });
+    } catch (e) {
+      this.gameRef = null;
+      this.gameCode = null;
+      this.myColor = null;
+      // Someone took the seat a moment ago.
+      throw new Error(isPermissionDenied(e) ? 'GAME_FULL' : e.message);
+    }
+    // The host is already seated.
+    this._opponentJoined = true;
+    await this.gameRef.child('meta').update({
+      status: 'playing',
+      startedAt: firebase.database.ServerValue.TIMESTAMP,
     });
-    await this.gameRef.child('meta/status').set('playing');
 
     this._setupPresence();
     const opponentColor = myColor === 'red' ? 'black' : 'red';
@@ -135,6 +180,9 @@ export class OnlineManager {
 
       // moves is an object like {0: {fromRow,...}, 1: {fromRow,...}, ...}
       const keys = Object.keys(moves).map(Number).sort((a, b) => a - b);
+
+      // Server time of every move, for the clocks (moves without one, from older pages, have none).
+      this.moveTimes = keys.map(k => (moves[k] && typeof moves[k].t === 'number') ? moves[k].t : null);
 
       // Process any moves we haven't applied yet
       for (const idx of keys) {
@@ -164,8 +212,33 @@ export class OnlineManager {
 
     // Listen for game result
     this.gameRef.child('result').on('value', (snap) => {
-      if (snap.exists() && this._onGameResult) this._onGameResult(snap.val());
+      if (!snap.exists()) return;
+      // A resignation carries the server's time of it: both sides stop the clocks there.
+      if (typeof snap.val().t === 'number') this.endedAt = snap.val().t;
+      if (this._onGameResult) this._onGameResult(snap.val());
     });
+
+    // When the game started, for the clocks
+    this.gameRef.child('meta/startedAt').on('value', (snap) => {
+      this.startedAt = typeof snap.val() === 'number' ? snap.val() : null;
+    });
+  }
+
+  /**
+   * Red's and black's thinking time in ms, from the server's time of each move, so both players
+   * (and the Android app) show the same clocks. Mirrors OnlineProtocol.sideTimes in the app.
+   */
+  getClocks(gameOver) {
+    let red = 0, black = 0;
+    let since = this.startedAt;
+    const charge = (index, until) => {
+      if (since == null || until == null) return;
+      const spent = Math.max(0, until - since);
+      if (index % 2 === 0) red += spent; else black += spent;
+    };
+    this.moveTimes.forEach((t, i) => { charge(i, t); since = t; });
+    charge(this.moveTimes.length, gameOver ? this.endedAt : this.serverNow());
+    return { red, black };
   }
 
   sendMove(move) {
@@ -175,9 +248,10 @@ export class OnlineManager {
     const data = {
       fromRow: move.from.row, fromCol: move.from.col,
       toRow: move.to.row, toCol: move.to.col,
+      t: firebase.database.ServerValue.TIMESTAMP,
     };
     console.log(`Sending move: ${idx} (${data.fromRow},${data.fromCol})→(${data.toRow},${data.toCol})`);
-    this.gameRef.child(`moves/${idx}`).set(data);
+    this.gameRef.child(`moves/${idx}`).set(data).catch((e) => console.error('Move refused:', e));
     this.appliedMoveCount = idx + 1;
   }
 
@@ -188,8 +262,36 @@ export class OnlineManager {
 
   sendGameResult(result) {
     if (!this.gameRef) return;
-    this.gameRef.child('result').set(result);
-    this.gameRef.child('meta/status').set('finished');
+    // Both sides write the result they reached; the rules take the first and accept the same
+    // one again, and turn down a different one.
+    const data = { type: result.type };
+    if (result.winner) data.winner = result.winner;
+    if (result.type === 'resign') data.t = firebase.database.ServerValue.TIMESTAMP;
+    this.gameRef.update({ result: data, 'meta/status': 'finished' })
+      .catch((e) => console.warn('Result not written:', e.message));
+  }
+
+  /** Resign the game in progress; the opponent wins. */
+  resign() {
+    if (!this.gameRef || !this.myColor) return;
+    this.endedAt = this.serverNow();
+    this.sendGameResult({ type: 'resign', winner: this.myColor === 'red' ? 'black' : 'red' });
+  }
+
+  /**
+   * Leave the room. A room nobody joined is deleted; a finished one too when the opponent has
+   * already gone (whoever leaves last clears it away). The presence write queued for a lost
+   * connection is cancelled first, so it cannot bring a deleted room back.
+   */
+  leave(finished) {
+    if (!this.gameRef || !this.myColor) { this.cleanup(); return; }
+    const ref = this.gameRef;
+    const seat = ref.child(`players/${this.myColor}`);
+    const remove = !this._opponentJoined || (finished && this._opponentConnected !== true);
+    this.cleanup();
+    seat.onDisconnect().cancel()
+      .then(() => remove ? ref.remove() : seat.update({ connected: false }))
+      .catch((e) => console.warn('Leaving room:', e.message));
   }
 
   getGameCode() { return this.gameCode; }
@@ -201,6 +303,7 @@ export class OnlineManager {
     if (this.gameRef) {
       this.gameRef.child('moves').off();
       this.gameRef.child('result').off();
+      this.gameRef.child('meta/startedAt').off();
       this.gameRef.child(`players`).off();
       const opp = this.myColor === 'red' ? 'black' : 'red';
       this.gameRef.child(`players/${opp}/uid`).off();
@@ -216,6 +319,10 @@ export class OnlineManager {
     this.appliedMoveCount = 0;
     this._listening = false;
     this._opponentJoined = false;
+    this._opponentConnected = null;
+    this.startedAt = null;
+    this.moveTimes = [];
+    this.endedAt = null;
     sessionStorage.removeItem('xiangqi_online');
   }
 
@@ -224,14 +331,15 @@ export class OnlineManager {
     const playerRef = this.gameRef.child(`players/${this.myColor}`);
     this.presenceListener = connRef.on('value', (snap) => {
       if (snap.val() === true) {
-        playerRef.update({ connected: true });
         playerRef.onDisconnect().update({ connected: false });
+        playerRef.update({ connected: true }).catch(() => {});
       }
     });
   }
 
   _setupOpponentPresence(opponentColor) {
     this.gameRef.child(`players/${opponentColor}/connected`).on('value', (snap) => {
+      this._opponentConnected = snap.val() === true;
       if (this._onOpponentConnection) this._onOpponentConnection(snap.val() === true);
     });
   }

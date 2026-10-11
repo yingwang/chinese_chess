@@ -31,6 +31,24 @@ function isPermissionDenied(e) {
   return /permission/i.test((e && (e.code || e.message)) || '');
 }
 
+/**
+ * A stalemate (困毙: no legal move, not in check) loses for the side that cannot move, and is
+ * written with its winner. Older pages, and the app before 2.5.1, wrote it without one, as a
+ * draw; that winner is filled in here: the side stuck is the one to move after the game's
+ * [moveCount] moves. Mirrors OnlineProtocol.completeResult in the app.
+ */
+export function completeResult(result, moveCount) {
+  if (!result || result.type !== 'stalemate' || result.winner) return result;
+  return { ...result, winner: moveCount % 2 === 0 ? 'black' : 'red' };
+}
+
+/**
+ * How long the joiner has to write the start of the game (status and startedAt, just after taking
+ * the seat) before the host writes it instead. The rules take only one startedAt, so the host
+ * waits rather than race a joiner that is still on its way. Same as START_GRACE_MS in the app.
+ */
+const START_GRACE_MS = 8000;
+
 export class OnlineManager {
   constructor() {
     this.db = null;
@@ -54,6 +72,7 @@ export class OnlineManager {
     this.endedAt = null;
     this._offsetListener = null;
     this._opponentConnected = null;
+    this._startTimer = null;
   }
 
   async initialize() {
@@ -109,8 +128,10 @@ export class OnlineManager {
     this.gameRef.child(`players/${opponentColor}/uid`).on('value', (snap) => {
       if (snap.exists() && snap.val() && !this._opponentJoined) {
         this._opponentJoined = true;
-        // The joiner has set this already; repeated in case it was cut off in between.
+        // The joiner has set this already; repeated in case it was cut off in between, so the
+        // first move is taken. The start time follows if it is still missing a moment later.
         this.gameRef.child('meta/status').set('playing').catch(() => {});
+        this._startIfStalled(this.gameRef);
         this._setupOpponentPresence(opponentColor);
         if (this._onOpponentJoined) this._onOpponentJoined();
       }
@@ -154,10 +175,18 @@ export class OnlineManager {
     }
     // The host is already seated.
     this._opponentJoined = true;
-    await this.gameRef.child('meta').update({
-      status: 'playing',
-      startedAt: firebase.database.ServerValue.TIMESTAMP,
-    });
+    try {
+      await this.gameRef.child('meta').update({
+        status: 'playing',
+        startedAt: firebase.database.ServerValue.TIMESTAMP,
+      });
+    } catch (e) {
+      // Refused when the host has started the game already, having waited for this write and
+      // given up on it (_startIfStalled): the seat is ours and the game on, all this was for.
+      if (!isPermissionDenied(e)) throw e;
+      const now = (await this.gameRef.child('meta').once('value')).val() || {};
+      if (now.status !== 'playing' || typeof now.startedAt !== 'number') throw e;
+    }
 
     this._setupPresence();
     const opponentColor = myColor === 'red' ? 'black' : 'red';
@@ -241,6 +270,30 @@ export class OnlineManager {
     return { red, black };
   }
 
+  /**
+   * If the joiner was cut off between taking the seat and starting the game, the clocks would
+   * never run: after START_GRACE_MS with no startedAt, the host writes it, with the status, in one
+   * update (the rules let a seated player write startedAt while it is missing).
+   */
+  _startIfStalled(ref) {
+    clearTimeout(this._startTimer);
+    this._startTimer = setTimeout(async () => {
+      this._startTimer = null;
+      if (this.gameRef !== ref) return;
+      try {
+        const meta = (await ref.child('meta').once('value')).val();
+        if (!meta || typeof meta.startedAt === 'number' || meta.status === 'finished') return;
+        console.log('No start time after both seats were taken; writing it');
+        await ref.child('meta').update({
+          status: 'playing',
+          startedAt: firebase.database.ServerValue.TIMESTAMP,
+        });
+      } catch (e) {
+        console.warn('Start of the game not written:', e.message);
+      }
+    }, START_GRACE_MS);
+  }
+
   sendMove(move) {
     if (!this.gameRef) return;
     // Write at the current total move count
@@ -313,6 +366,8 @@ export class OnlineManager {
       this.db?.ref('.info/connected').off('value', this.presenceListener);
       this.presenceListener = null;
     }
+    clearTimeout(this._startTimer);
+    this._startTimer = null;
     this.gameRef = null;
     this.gameCode = null;
     this.myColor = null;

@@ -605,12 +605,10 @@ export class ChessAI {
 
     const legalMoves = board.getAllLegalMoves();
 
+    // No legal move loses, in check (mate) or not (困毙, stalemate): scored alike.
     if (legalMoves.length === 0) {
-      if (inCheck) {
-        return maximizing ? -Evaluator.CHECKMATE_SCORE + ply
-                          : Evaluator.CHECKMATE_SCORE - ply;
-      }
-      return 0; // Stalemate
+      return maximizing ? -Evaluator.CHECKMATE_SCORE + ply
+                        : Evaluator.CHECKMATE_SCORE - ply;
     }
 
     // Futility pruning: at shallow depths, skip quiet moves that can't raise alpha

@@ -63,6 +63,7 @@ AlphaZero-style ResNet (128 filters, 6 residual blocks) with dual policy + value
 
 - **Perpetual check detection / 长将检测** — Perpetual check (same position 3 times with check) results in loss for the checking side / 同一局面出现3次且处于将军状态，长将方判负
 - **Threefold repetition draw / 三次重复和棋** — Same position 3 times without check is a draw / 同一局面出现3次（无将军）判和棋
+- **Stalemate loses / 困毙判负** — A side with no legal move loses even when not in check, as with mate / 没有被将军但无子可走的一方判负，和将死一样
 - **AI avoidance / AI 规避** — AI proactively avoids moves that would cause repetition penalties / AI 主动规避会导致判负的重复走法
 
 ### Other Features / 其他功能

@@ -2,7 +2,7 @@ import { PieceColor, PieceType } from './model.js';
 import { GameController, AI_DIFFICULTY, GAME_MODE } from './controller.js';
 import { BoardView } from './view.js';
 import { SoundManager } from './audio.js';
-import { OnlineManager, CODE_LENGTH, normalizeCode, isValidCode } from './online.js';
+import { OnlineManager, CODE_LENGTH, normalizeCode, isValidCode, completeResult } from './online.js';
 import { t, toggleLang, getLang } from './i18n.js';
 
 // DOM elements
@@ -191,9 +191,11 @@ onlineManager.onOpponentConnection((connected) => {
     }
 });
 
-onlineManager.onGameResult((result) => {
+onlineManager.onGameResult((written) => {
     if (controller.gameOver) return;
-    // A resignation, or a result the other side reached before this board did.
+    // A resignation, or a result the other side reached before this board did. A stalemate from
+    // an older page or app comes without its winner; the moves say who it is.
+    const result = completeResult(written, onlineManager.moveTimes.length);
     controller.gameOver = true;
     if (onlineManager.endedAt == null) onlineManager.endedAt = onlineManager.serverNow();
     const iWin = (result.winner === 'red' && controller.myColor === PieceColor.RED) ||
@@ -330,24 +332,18 @@ function updateMoveHistory() {
 // === Game Over dialog ===
 
 function showGameOverDialog(result) {
-    if (isOnlineGame) {
-        const myColor = controller.myColor;
-        if (result.type === 'checkmate' || result.type === 'perpetualCheck') {
-            const iWin = result.winner === myColor;
-            gameOverTitle.textContent = iWin ? t('youWin') : t('youLose');
-            gameOverMessage.textContent = result.type === 'perpetualCheck' ? t('perpetualCheck') : t('checkmate');
-        } else {
-            gameOverTitle.textContent = t('draw');
-            gameOverMessage.textContent = result.type === 'repetition' ? t('repetitionDraw') : t('stalemate');
-        }
+    // Mate, 困毙 (stalemate: no legal move loses too) and perpetual check have a winner;
+    // only a repetition is a draw.
+    const reasons = { checkmate: t('checkmate'), stalemate: t('stalemate'), perpetualCheck: t('perpetualCheck') };
+    if (!result.winner) {
+        gameOverTitle.textContent = t('draw');
+        gameOverMessage.textContent = t('repetitionDraw');
+    } else if (isOnlineGame) {
+        gameOverTitle.textContent = result.winner === controller.myColor ? t('youWin') : t('youLose');
+        gameOverMessage.textContent = reasons[result.type] || '';
     } else {
-        if (result.type === 'checkmate' || result.type === 'perpetualCheck') {
-            gameOverTitle.textContent = result.winner === PieceColor.RED ? t('redWins') : t('blackWins');
-            gameOverMessage.textContent = result.type === 'perpetualCheck' ? t('perpetualCheck') : t('checkmate');
-        } else {
-            gameOverTitle.textContent = t('draw');
-            gameOverMessage.textContent = result.type === 'repetition' ? t('repetitionDraw') : t('stalemate');
-        }
+        gameOverTitle.textContent = result.winner === PieceColor.RED ? t('redWins') : t('blackWins');
+        gameOverMessage.textContent = reasons[result.type] || '';
     }
     gameOverDialog.classList.remove('hidden');
 }

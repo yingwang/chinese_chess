@@ -241,8 +241,10 @@ class GameController {
       return true;
     }
 
+    // 困毙: no legal move without being in check. In xiangqi that loses, as mate does.
     if (this.board.isStalemate()) {
-      const result = { type: 'stalemate' };
+      const winner = PieceColor.opposite(this.board.currentPlayer);
+      const result = { type: 'stalemate', winner };
       this.gameOver = true;
       if (this.onGameOver) this.onGameOver(result);
       return true;

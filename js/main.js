@@ -3,7 +3,7 @@ import { GameController, AI_DIFFICULTY, GAME_MODE } from './controller.js';
 import { BoardView } from './view.js';
 import { SoundManager } from './audio.js';
 import { OnlineManager, CODE_LENGTH, normalizeCode, isValidCode, completeResult } from './online.js';
-import { t, toggleLang, getLang } from './i18n.js';
+import { t, toggleLang, getLang, setLang } from './i18n.js';
 
 // DOM elements
 const canvas = document.getElementById('board-canvas');
@@ -85,6 +85,8 @@ function updateLangButtons() {
     langBtn.textContent = label;
     dialogLangBtn.textContent = label;
 }
+// The page is written in Chinese; an English browser starts in English, so translate it once now.
+setLang(getLang());
 updateLangButtons();
 
 function switchLang() {

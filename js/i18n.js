@@ -159,6 +159,7 @@ export function toggleLang() {
 }
 
 function applyTranslations() {
+  document.documentElement.lang = currentLang === 'zh' ? 'zh-CN' : 'en';
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.dataset.i18n;
     const text = t(key);

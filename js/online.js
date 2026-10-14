@@ -31,14 +31,21 @@ function isPermissionDenied(e) {
   return /permission/i.test((e && (e.code || e.message)) || '');
 }
 
+/** The result types this page writes and understands; the app (OnlineProtocol.ResultType) has the same. */
+export const RESULT_TYPES = ['checkmate', 'stalemate', 'perpetualCheck', 'perpetualChase', 'repetition', 'resign'];
+
 /**
- * A stalemate (困毙: no legal move, not in check) loses for the side that cannot move, and is
- * written with its winner. Older pages, and the app before 2.5.1, wrote it without one, as a
- * draw; that winner is filled in here: the side stuck is the one to move after the game's
- * [moveCount] moves. Mirrors OnlineProtocol.completeResult in the app.
+ * A result as read from the room, made whole. A stalemate (困毙: no legal move, not in check)
+ * loses for the side that cannot move, and is written with its winner. Older pages, and the app
+ * before 2.5.1, wrote it without one, as a draw; that winner is filled in here: the side stuck
+ * is the one to move after the game's [moveCount] moves. A type this page does not know (one a
+ * newer version may write) is taken as a draw with no winner, so the game still ends. Mirrors
+ * OnlineProtocol.completeResult and decodeResult in the app.
  */
 export function completeResult(result, moveCount) {
-  if (!result || result.type !== 'stalemate' || result.winner) return result;
+  if (!result) return result;
+  if (!RESULT_TYPES.includes(result.type)) return { type: 'unknown', winner: null };
+  if (result.type !== 'stalemate' || result.winner) return result;
   return { ...result, winner: moveCount % 2 === 0 ? 'black' : 'red' };
 }
 

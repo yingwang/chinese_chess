@@ -409,10 +409,15 @@ export class ChessAI {
     return this.historyTable.get(this._historyKey(move)) || 0;
   }
 
-  findBestMove(board, moveHistory = []) {
+  /**
+   * The best move for the side to move. With [allowedMoves], only those root moves are
+   * considered and the opening book is skipped (the controller uses it to steer away from a
+   * repetition that would lose or draw).
+   */
+  findBestMove(board, moveHistory = [], allowedMoves = null) {
     return new Promise((resolve) => {
       // Check opening book first
-      if (moveHistory.length < 8) {
+      if (!allowedMoves && moveHistory.length < 8) {
         const bookMoveStr = OpeningBook.getOpeningMove(moveHistory);
         if (bookMoveStr) {
           const legalMoves = board.getAllLegalMoves();
@@ -430,7 +435,7 @@ export class ChessAI {
       this.killerMoves = [];
       this.historyTable.clear();
 
-      const legalMoves = board.getAllLegalMoves();
+      const legalMoves = allowedMoves || board.getAllLegalMoves();
       if (legalMoves.length === 0) {
         resolve(null);
         return;

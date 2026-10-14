@@ -205,7 +205,7 @@ onlineManager.onGameResult((written) => {
     gameOverTitle.textContent = !result.winner ? t('draw') : (iWin ? t('youWin') : t('youLose'));
     const reasons = {
         resign: t('opponentResigned'), checkmate: t('checkmate'), perpetualCheck: t('perpetualCheck'),
-        stalemate: t('stalemate'), repetition: t('repetitionDraw'),
+        perpetualChase: t('perpetualChase'), stalemate: t('stalemate'), repetition: t('repetitionDraw'),
     };
     gameOverMessage.textContent = reasons[result.type] || '';
     gameOverDialog.classList.remove('hidden');
@@ -334,9 +334,12 @@ function updateMoveHistory() {
 // === Game Over dialog ===
 
 function showGameOverDialog(result) {
-    // Mate, 困毙 (stalemate: no legal move loses too) and perpetual check have a winner;
-    // only a repetition is a draw.
-    const reasons = { checkmate: t('checkmate'), stalemate: t('stalemate'), perpetualCheck: t('perpetualCheck') };
+    // Mate, 困毙 (stalemate: no legal move loses too), perpetual check and perpetual chase have
+    // a winner; only a repetition is a draw.
+    const reasons = {
+        checkmate: t('checkmate'), stalemate: t('stalemate'),
+        perpetualCheck: t('perpetualCheck'), perpetualChase: t('perpetualChase'),
+    };
     if (!result.winner) {
         gameOverTitle.textContent = t('draw');
         gameOverMessage.textContent = t('repetitionDraw');

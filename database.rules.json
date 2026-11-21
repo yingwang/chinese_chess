@@ -70,7 +70,7 @@
           ".write": "auth != null && newData.exists() && (data.parent().child('players/red/uid').val() === auth.uid || data.parent().child('players/black/uid').val() === auth.uid) && (!data.exists() || (data.child('type').val() === newData.child('type').val() && data.child('winner').val() === newData.child('winner').val()))",
           ".validate": "newData.hasChildren(['type']) && (newData.child('type').val() !== 'resign' || (newData.child('winner').val() === 'black' && newData.parent().child('players/red/uid').val() === auth.uid) || (newData.child('winner').val() === 'red' && newData.parent().child('players/black/uid').val() === auth.uid))",
           "type": {
-            ".validate": "newData.val() === 'checkmate' || newData.val() === 'stalemate' || newData.val() === 'perpetualCheck' || newData.val() === 'repetition' || newData.val() === 'resign'"
+            ".validate": "newData.val() === 'checkmate' || newData.val() === 'stalemate' || newData.val() === 'perpetualCheck' || newData.val() === 'perpetualChase' || newData.val() === 'repetition' || newData.val() === 'resign'"
           },
           "winner": {
             ".validate": "newData.val() === 'red' || newData.val() === 'black'"

@@ -104,7 +104,7 @@
             height: 100%;
             touch-action: none;
         }
-        #controls {
+        #controls, #review-bar {
             display: flex;
             gap: 8px;
             padding: 10px 0;
@@ -112,7 +112,18 @@
             justify-content: center;
             flex-wrap: wrap;
         }
-        #controls button {
+        #review-bar { align-items: center; padding-bottom: 0; }
+        #review-bar.hidden { display: none; }
+        #review-pos {
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+            min-width: 4.5em;
+            text-align: center;
+        }
+        #review-bar button:disabled { opacity: 0.35; cursor: default; }
+        .reviewing .move-entry { cursor: pointer; }
+        .move-entry.current { background: var(--accent-bg); border-radius: 3px; }
+        #controls button, #review-bar button {
             background: var(--btn-bg);
             color: var(--accent);
             border: 1px solid var(--accent-dim);
@@ -123,8 +134,8 @@
             font-family: inherit;
             transition: background 0.2s;
         }
-        #controls button:hover { background: var(--btn-hover); }
-        #controls button:active { background: var(--btn-active); }
+        #controls button:hover, #review-bar button:hover:enabled { background: var(--btn-hover); }
+        #controls button:active, #review-bar button:active:enabled { background: var(--btn-active); }
         #controls button.hidden { display: none; }
 
         #info-panel {
@@ -252,6 +263,13 @@
         <div id="game-container">
             <canvas id="board-canvas"></canvas>
         </div>
+        <div id="review-bar" class="hidden">
+            <button id="review-first">⏮</button>
+            <button id="review-prev">◀</button>
+            <span id="review-pos"></span>
+            <button id="review-next">▶</button>
+            <button id="review-last">⏭</button>
+        </div>
         <div id="controls">
             <button id="new-game-btn" data-i18n="newGame">新游戏</button>
             <button id="undo-btn" data-i18n="undo">悔棋</button>
@@ -279,10 +297,12 @@
             <h2 data-i18n="newGame" style="display:inline">新游戏</h2>
             <button id="dialog-lang-btn" style="background:none;border:1px solid var(--accent-dim);color:var(--accent);border-radius:4px;padding:2px 8px;font-size:0.8em;cursor:pointer;margin-left:8px;vertical-align:super">EN</button>
             <button id="dialog-theme-btn" style="background:none;border:1px solid var(--accent-dim);color:var(--accent);border-radius:4px;padding:2px 8px;font-size:0.8em;cursor:pointer;margin-left:4px;vertical-align:super">🌙</button>
+            <button id="dialog-sound-btn" style="background:none;border:1px solid var(--accent-dim);color:var(--accent);border-radius:4px;padding:2px 8px;font-size:0.8em;cursor:pointer;margin-left:4px;vertical-align:super">🔊</button>
             <div class="setting">
                 <label data-i18n="gameMode">游戏模式:</label>
                 <select id="game-mode-select">
                     <option value="PLAYER_VS_AI" data-i18n="pvai">人机对战</option>
+                    <option value="JIEQI" data-i18n="jieqi">揭棋</option>
                     <option value="PLAYER_VS_PLAYER" data-i18n="pvp">双人对战</option>
                     <option value="AI_VS_AI" data-i18n="aivai">电脑对战</option>
                     <option value="ONLINE" data-i18n="online">在线对战</option>
@@ -350,7 +370,10 @@
         <div class="modal-content">
             <h2 id="game-over-title"></h2>
             <p id="game-over-message"></p>
-            <button id="game-over-new-game-btn" data-i18n="newGame">新游戏</button>
+            <div class="dialog-buttons">
+                <button id="game-over-review-btn" data-i18n="review">复盘</button>
+                <button id="game-over-new-game-btn" data-i18n="newGame">新游戏</button>
+            </div>
         </div>
     </div>
 

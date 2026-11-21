@@ -1,12 +1,19 @@
 // === Sound Manager for Chinese Chess ===
 // Uses Web Audio API to generate classic Chinese chess-style sounds
 
+const MUTED_KEY = 'xiangqi_muted';
+
+function readMuted() {
+  try { return localStorage.getItem(MUTED_KEY) === '1'; } catch (e) { return false; }
+}
+
 export class SoundManager {
   constructor() {
     this.audioCtx = null;
     this.sfxGain = null;
     this.masterGain = null;
-    this.muted = false;
+    // The sound switch is remembered: a game, a new game or a reload starts the way it was left.
+    this.muted = readMuted();
     this.bgMusicPlaying = false;
 
     // Background music uses HTML Audio element for proper WAV playback
@@ -41,7 +48,12 @@ export class SoundManager {
     if (this.audioCtx && this.masterGain) {
       this.masterGain.gain.value = this.muted ? 0 : 1.0;
     }
-    this.bgAudio.muted = this.muted;
+    if (this.muted) {
+      this.bgAudio.pause();
+    } else if (this.bgMusicPlaying) {
+      this.bgAudio.play().catch(() => {});
+    }
+    try { localStorage.setItem(MUTED_KEY, this.muted ? '1' : '0'); } catch (e) {}
     return this.muted;
   }
 
@@ -164,11 +176,12 @@ export class SoundManager {
 
   // === Background Music (WAV file) ===
 
+  // Marks the music as wanted; it only sounds while the switch is on.
   startBackgroundMusic() {
     if (this.bgMusicPlaying) return;
     this.bgMusicPlaying = true;
     this.bgAudio.currentTime = 0;
-    this.bgAudio.play().catch(() => {});
+    if (!this.muted) this.bgAudio.play().catch(() => {});
   }
 
   stopBackgroundMusic() {

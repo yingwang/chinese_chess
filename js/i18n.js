@@ -67,6 +67,11 @@ const translations = {
     leaveOnlineConfirm: '对局还在进行，离开就算认输。确定吗？',
     redShort: '红',
     blackShort: '黑',
+    review: '复盘',
+    reviewStart: '开局',
+    check: '将军',
+    jieqi: '揭棋',
+    revealed: '揭',
   },
   en: {
     title: 'Chinese Chess',
@@ -136,6 +141,11 @@ const translations = {
     leaveOnlineConfirm: 'The game is still on; leaving resigns it. Leave?',
     redShort: 'Red',
     blackShort: 'Black',
+    review: 'Review',
+    reviewStart: 'Start',
+    check: 'Check',
+    jieqi: 'Jieqi (hidden pieces)',
+    revealed: '=',
   }
 };
 

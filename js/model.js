@@ -70,18 +70,23 @@ export class Position {
 // === Piece ===
 
 export class Piece {
-  constructor(type, color, position) {
+  constructor(type, color, position, hidden = false, moveAs = null) {
     this.type = type;
     this.color = color;
     this.position = position;
+    // 揭棋 (Jieqi): a face-down piece. Its true type is drawn at the start, but no player, and no
+    // AI, may use it while the piece is down: a face-down piece moves as [moveAs], the piece its
+    // starting point belongs to, and its first move turns it face up.
+    this.hidden = hidden;
+    this.moveAs = moveAs;
   }
 
   copy() {
-    return new Piece(this.type, this.color, new Position(this.position.row, this.position.col));
+    return new Piece(this.type, this.color, new Position(this.position.row, this.position.col), this.hidden, this.moveAs);
   }
 
   getLegalMoves(board) {
-    switch (this.type) {
+    switch (this.hidden ? this.moveAs : this.type) {
       case PieceType.GENERAL:  return this._generalMoves(board);
       case PieceType.ADVISOR:  return this._advisorMoves(board);
       case PieceType.ELEPHANT: return this._elephantMoves(board);
@@ -149,18 +154,21 @@ export class Piece {
     return moves;
   }
 
-  // Advisor: 1 step diagonally within palace
+  // Advisor: 1 step diagonally within palace. In 揭棋 a face-up advisor may leave the palace.
   _advisorMoves(board) {
     const moves = [];
     const { row, col } = this.position;
-    const minRow = this.color === PieceColor.RED ? 7 : 0;
-    const maxRow = this.color === PieceColor.RED ? 9 : 2;
+    const free = board.jieqi && !this.hidden;
+    const minRow = free ? 0 : (this.color === PieceColor.RED ? 7 : 0);
+    const maxRow = free ? 9 : (this.color === PieceColor.RED ? 9 : 2);
+    const minCol = free ? 0 : 3;
+    const maxCol = free ? 8 : 5;
     const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
 
     for (const [dr, dc] of directions) {
       const nr = row + dr;
       const nc = col + dc;
-      if (nr >= minRow && nr <= maxRow && nc >= 3 && nc <= 5) {
+      if (nr >= minRow && nr <= maxRow && nc >= minCol && nc <= maxCol) {
         const move = this._canMoveTo(board, nr, nc);
         if (move) moves.push(move);
       }
@@ -168,12 +176,14 @@ export class Piece {
     return moves;
   }
 
-  // Elephant: 2 steps diagonally, blocked by elephant eye, cannot cross river
+  // Elephant: 2 steps diagonally, blocked by elephant eye, cannot cross river. In 揭棋 a face-up
+  // elephant may cross it.
   _elephantMoves(board) {
     const moves = [];
     const { row, col } = this.position;
-    const minRow = this.color === PieceColor.RED ? 5 : 0;
-    const maxRow = this.color === PieceColor.RED ? 9 : 4;
+    const free = board.jieqi && !this.hidden;
+    const minRow = free ? 0 : (this.color === PieceColor.RED ? 5 : 0);
+    const maxRow = free ? 9 : (this.color === PieceColor.RED ? 9 : 4);
     const steps = [[-2, -2, -1, -1], [-2, 2, -1, 1], [2, -2, 1, -1], [2, 2, 1, 1]];
 
     for (const [dr, dc, er, ec] of steps) {
@@ -325,6 +335,28 @@ export class Board {
   constructor() {
     this.pieces = new Map();
     this.currentPlayer = PieceColor.RED;
+    this.jieqi = false;
+  }
+
+  /**
+   * 揭棋: the generals stand as usual; each side's other fifteen pieces are shuffled and stand face
+   * down on the fifteen starting points.
+   */
+  static createJieqiBoard(random = Math.random) {
+    const board = Board.createInitialBoard();
+    board.jieqi = true;
+    for (const color of [PieceColor.RED, PieceColor.BLACK]) {
+      const pieces = board.getPiecesByColor(color).filter(p => p.type !== PieceType.GENERAL);
+      const types = pieces.map(p => p.type);
+      for (let i = types.length - 1; i > 0; i--) {
+        const j = Math.floor(random() * (i + 1));
+        [types[i], types[j]] = [types[j], types[i]];
+      }
+      pieces.forEach((p, i) => {
+        board.pieces.set(p.position.toString(), new Piece(types[i], color, p.position, true, p.type));
+      });
+    }
+    return board;
   }
 
   static createInitialBoard() {
@@ -571,6 +603,7 @@ export class Board {
   copy() {
     const newBoard = new Board();
     newBoard.currentPlayer = this.currentPlayer;
+    newBoard.jieqi = this.jieqi;
     for (const [key, piece] of this.pieces) {
       newBoard.pieces.set(key, piece.copy());
     }
@@ -580,7 +613,9 @@ export class Board {
   getPositionHash() {
     const entries = [];
     for (const [key, piece] of this.pieces) {
-      entries.push(`${key}:${piece.color}:${piece.type.chineseName}`);
+      // A face-down piece is known only by the piece it moves as.
+      const name = piece.hidden ? '?' + piece.moveAs.chineseName : piece.type.chineseName;
+      entries.push(`${key}:${piece.color}:${name}`);
     }
     entries.sort();
     return entries.join('|') + '|' + this.currentPlayer;

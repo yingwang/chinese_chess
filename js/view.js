@@ -28,6 +28,11 @@ export class BoardView {
     this.theme = 'dark';
     // Online as Black: the board is turned round so the player's own pieces are at the bottom.
     this.flipped = false;
+    // Off while a finished game is reviewed: the board only shows positions.
+    this.interactive = true;
+    // When on, a general in check is ringed in red together with the pieces giving check, so a
+    // finished or reviewed game shows how the mate was given.
+    this.showCheck = false;
 
     this.canvas.addEventListener('click', (e) => this._handleClick(e));
     this.canvas.addEventListener('touchend', (e) => {
@@ -144,7 +149,7 @@ export class BoardView {
   }
 
   _handleClickAt(px, py) {
-    if (!this.board) return;
+    if (!this.board || !this.interactive) return;
     const pos = this._toPosition(px, py);
     if (!pos) return;
 
@@ -257,8 +262,11 @@ export class BoardView {
     this._drawRiver();
     this._drawPositionMarkers();
     this._drawLastMove();
+    const check = this._checkLines();
+    this._drawCheckLines(check);
     this._drawLegalMoves();
     this._drawPieces();
+    this._drawCheckRings(check);
     this._drawCaptured();
     if (this.aiThinking) this._drawThinking();
   }
@@ -406,6 +414,51 @@ export class BoardView {
     }
   }
 
+  // The general of the side to move, if it is in check, and the pieces giving the check.
+  _checkLines() {
+    if (!this.showCheck || !this.board) return null;
+    const color = this.board.currentPlayer;
+    const general = this.board._findGeneral(color);
+    if (!general) return null;
+    const attackers = this.board.getPiecesByColor(PieceColor.opposite(color))
+      .filter(p => p.getLegalMoves(this.board).some(m => m.to.equals(general.position)));
+    return attackers.length ? { general, attackers } : null;
+  }
+
+  _drawCheckLines(check) {
+    if (!check) return;
+    const ctx = this.ctx;
+    const g = this._toPixel(check.general.position.row, check.general.position.col);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(210, 40, 40, 0.55)';
+    ctx.lineWidth = Math.max(2, this.cellSize * 0.07);
+    ctx.lineCap = 'round';
+    for (const a of check.attackers) {
+      const p = this._toPixel(a.position.row, a.position.col);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(g.x, g.y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  _drawCheckRings(check) {
+    if (!check) return;
+    const ctx = this.ctx;
+    const r = this.cellSize * 0.4 + 4;
+    ctx.save();
+    ctx.strokeStyle = 'rgb(210, 40, 40)';
+    ctx.lineWidth = 3;
+    for (const piece of [check.general, ...check.attackers]) {
+      const { x, y } = this._toPixel(piece.position.row, piece.position.col);
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   _drawLegalMoves() {
     const ctx = this.ctx;
     const dotR = this.cellSize * 0.08;
@@ -481,6 +534,11 @@ export class BoardView {
       ctx.stroke();
     }
 
+    if (piece.hidden) {
+      this._drawFaceDown(x, y, piece, r, isSelected);
+      return;
+    }
+
     // Piece body — 4-stop radial gradient (matches mobile)
     const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.05, x, y, r);
     grad.addColorStop(0, 'rgb(255, 250, 235)');   // specular highlight
@@ -525,6 +583,37 @@ export class BoardView {
     // Main text
     ctx.fillStyle = textColor;
     ctx.fillText(displayName, x, y + 1);
+  }
+
+  // 揭棋: a face-down piece shows its back, dark wood ringed in its side's colour, with no name.
+  _drawFaceDown(x, y, piece, r, isSelected) {
+    const ctx = this.ctx;
+    const side = piece.color === PieceColor.RED ? 'rgb(180, 30, 30)' : 'rgb(30, 30, 30)';
+    const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.05, x, y, r);
+    grad.addColorStop(0, 'rgb(170, 128, 86)');
+    grad.addColorStop(0.6, 'rgb(130, 92, 58)');
+    grad.addColorStop(1, 'rgb(100, 68, 42)');
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.strokeStyle = isSelected ? 'rgb(200, 155, 30)' : side;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.62, 0, Math.PI * 2);
+    ctx.strokeStyle = side;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.14, 0, Math.PI * 2);
+    ctx.fillStyle = side;
+    ctx.fill();
   }
 
   // The y of a side's tray: Black's above the board, Red's below (the other way round when flipped).

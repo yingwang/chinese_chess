@@ -85,15 +85,32 @@ function updateLangButtons() {
     langBtn.textContent = label;
     dialogLangBtn.textContent = label;
 }
+// Sound: one switch, shown in the controls and in the new-game dialog, so it can be turned off
+// before a game starts. The setting is remembered across games and reloads.
+const dialogSoundBtn = document.getElementById('dialog-sound-btn');
+function updateSoundButtons() {
+    const muted = soundManager.isMuted();
+    soundBtn.textContent = muted ? t('soundOff') : t('soundOn');
+    dialogSoundBtn.textContent = muted ? '🔇' : '🔊';
+}
+function toggleSound() {
+    soundManager.toggleMute();
+    updateSoundButtons();
+}
+soundBtn.addEventListener('click', toggleSound);
+dialogSoundBtn.addEventListener('click', toggleSound);
+
 // The page is written in Chinese; an English browser starts in English, so translate it once now.
 setLang(getLang());
 updateLangButtons();
+updateSoundButtons();
 
 function switchLang() {
     toggleLang();
     updateLangButtons();
     updateStatus();
-    soundBtn.textContent = soundManager.isMuted() ? t('soundOff') : t('soundOn');
+    updateSoundButtons();
+    if (reviewIndex !== null) renderReview();
 }
 langBtn.addEventListener('click', switchLang);
 dialogLangBtn.addEventListener('click', switchLang);
@@ -143,6 +160,8 @@ controller.onAIThinking = (thinking) => {
 
 controller.onGameOver = (result) => {
     stopTimer();
+    boardView.showCheck = true;
+    boardView.draw();
     if (isOnlineGame) {
         // Deferred: when our own move ends the game, the move is sent first (right after
         // makePlayerMove returns); the database takes no move once a result is in.
@@ -172,6 +191,7 @@ onlineManager.onRemoteMove((move) => {
 onlineManager.onOpponentJoined(() => {
     onlineDialog.classList.add('hidden');
     infoPanel.classList.remove('hidden');
+    leaveFinishedGame();
     controller.startNewGame();
     boardView.setFlipped(isOnlineGame && controller.myColor === PieceColor.BLACK);
     onlineManager.startListening(); // AFTER startNewGame to avoid race
@@ -208,7 +228,9 @@ onlineManager.onGameResult((written) => {
         perpetualChase: t('perpetualChase'), stalemate: t('stalemate'), repetition: t('repetitionDraw'),
     };
     gameOverMessage.textContent = reasons[result.type] || '';
-    gameOverDialog.classList.remove('hidden');
+    boardView.showCheck = true;
+    boardView.draw();
+    openGameOverDialog(0);
     stopTimer();
     updateTimer();
     updateResignButton();
@@ -230,7 +252,7 @@ resignBtn.addEventListener('click', () => {
     updateResignButton();
     gameOverTitle.textContent = t('youLose');
     gameOverMessage.textContent = t('youResigned');
-    gameOverDialog.classList.remove('hidden');
+    openGameOverDialog(0);
 });
 
 // === Status ===
@@ -292,12 +314,20 @@ function updateTimer() {
 
 const CHINESE_NUMERALS = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
 
+// 揭棋: a face-down piece is written as the piece it moved as, then what it turned out to be,
+// e.g. 車九进一揭炮.
 function toChineseNotation(move) {
+    const written = moveNotation(move, move.piece.hidden ? move.piece.moveAs : move.piece.type);
+    if (!move.piece.hidden) return written;
+    return written + t('revealed') + move.piece.type.getDisplayName(move.piece.color);
+}
+
+function moveNotation(move, type) {
     const piece = move.piece;
     const from = move.from;
     const to = move.to;
     const isRed = piece.color === PieceColor.RED;
-    const pieceName = piece.type.getDisplayName(piece.color);
+    const pieceName = type.getDisplayName(piece.color);
     const fromCol = isRed ? 9 - from.col : from.col + 1;
     const toCol = isRed ? 9 - to.col : to.col + 1;
     const formatNum = (n) => isRed ? CHINESE_NUMERALS[n] : String(n);
@@ -309,7 +339,7 @@ function toChineseNotation(move) {
     } else {
         const isAdvancing = isRed ? (to.row < from.row) : (to.row > from.row);
         direction = isAdvancing ? '进' : '退';
-        const isDiagonal = (piece.type === PieceType.HORSE || piece.type === PieceType.ELEPHANT || piece.type === PieceType.ADVISOR);
+        const isDiagonal = (type === PieceType.HORSE || type === PieceType.ELEPHANT || type === PieceType.ADVISOR);
         lastNum = isDiagonal ? formatNum(toCol) : formatNum(Math.abs(to.row - from.row));
     }
     return `${pieceName}${formatNum(fromCol)}${direction}${lastNum}`;
@@ -325,6 +355,7 @@ function updateMoveHistory() {
         const prefix = (i % 2 === 0) ? moveNum + '. ' : '';
         const span = document.createElement('span');
         span.className = 'move-entry ' + colorClass;
+        span.dataset.index = i;
         span.textContent = `${prefix}${toChineseNotation(move)} `;
         moveHistoryEl.appendChild(span);
     }
@@ -350,12 +381,128 @@ function showGameOverDialog(result) {
         gameOverTitle.textContent = result.winner === PieceColor.RED ? t('redWins') : t('blackWins');
         gameOverMessage.textContent = reasons[result.type] || '';
     }
-    gameOverDialog.classList.remove('hidden');
+    // A moment on the board first, so the move that ended the game is seen before the box covers it.
+    openGameOverDialog(900);
 }
+
+let gameOverTimer = null;
+function openGameOverDialog(delay) {
+    clearTimeout(gameOverTimer);
+    gameOverTimer = setTimeout(() => {
+        gameOverTimer = null;
+        gameOverDialog.classList.remove('hidden');
+    }, delay);
+}
+
+// === Review ===
+// After a game, its moves can be stepped through from the start to the end. The board then only
+// shows positions; a check is marked, so the mate can be followed.
+
+const reviewBar = document.getElementById('review-bar');
+const reviewPosEl = document.getElementById('review-pos');
+const reviewFirstBtn = document.getElementById('review-first');
+const reviewPrevBtn = document.getElementById('review-prev');
+const reviewNextBtn = document.getElementById('review-next');
+const reviewLastBtn = document.getElementById('review-last');
+let reviewIndex = null; // moves shown, 0 to all of them; null when not reviewing
+
+function enterReview() {
+    reviewIndex = controller.getMoveHistory().length;
+    boardView.interactive = false;
+    boardView.showCheck = true;
+    reviewBar.classList.remove('hidden');
+    moveHistoryEl.classList.add('reviewing');
+    renderReview();
+}
+
+function exitReview() {
+    if (reviewIndex === null) return;
+    reviewIndex = null;
+    boardView.interactive = true;
+    reviewBar.classList.add('hidden');
+    moveHistoryEl.classList.remove('reviewing');
+    for (const el of moveHistoryEl.querySelectorAll('.current')) el.classList.remove('current');
+    boardView.setHistory(controller.getMoveHistory());
+    boardView.setBoard(controller.getCurrentBoard());
+}
+
+// Before a new game or an undo: back to the live board, without the check marks of an ended game.
+function leaveFinishedGame() {
+    clearTimeout(gameOverTimer);
+    exitReview();
+    boardView.showCheck = false;
+}
+
+function renderReview() {
+    const moves = controller.getMoveHistory();
+    let board = controller.initialBoard;
+    for (let i = 0; i < reviewIndex; i++) {
+        board = board.makeMove(moves[i]);
+        board.currentPlayer = PieceColor.opposite(board.currentPlayer);
+    }
+    boardView.setHistory(moves.slice(0, reviewIndex));
+    boardView.setBoard(board);
+
+    reviewPosEl.textContent = `${reviewIndex} / ${moves.length}`;
+    reviewFirstBtn.disabled = reviewPrevBtn.disabled = reviewIndex === 0;
+    reviewNextBtn.disabled = reviewLastBtn.disabled = reviewIndex === moves.length;
+
+    let text = t('review') + ' · ';
+    if (reviewIndex === 0) {
+        text += t('reviewStart');
+    } else {
+        const move = moves[reviewIndex - 1];
+        const side = move.piece.color === PieceColor.RED ? t('redShort') : t('blackShort');
+        text += `${side} ${toChineseNotation(move)}`;
+        if (board.isInCheck(board.currentPlayer)) {
+            text += ' · ' + (board.isCheckmate() ? t('checkmate') : t('check'));
+        }
+    }
+    statusEl.textContent = text;
+
+    moveHistoryEl.querySelectorAll('.move-entry').forEach(el => {
+        const current = Number(el.dataset.index) === reviewIndex - 1;
+        el.classList.toggle('current', current);
+        if (current) el.scrollIntoView({ block: 'nearest' });
+    });
+}
+
+function stepReview(to) {
+    if (reviewIndex === null) return;
+    const total = controller.getMoveHistory().length;
+    const next = Math.max(0, Math.min(total, to));
+    if (next === reviewIndex) return;
+    reviewIndex = next;
+    renderReview();
+}
+
+reviewFirstBtn.addEventListener('click', () => stepReview(0));
+reviewPrevBtn.addEventListener('click', () => stepReview(reviewIndex - 1));
+reviewNextBtn.addEventListener('click', () => stepReview(reviewIndex + 1));
+reviewLastBtn.addEventListener('click', () => stepReview(Infinity));
+moveHistoryEl.addEventListener('click', (e) => {
+    const entry = e.target.closest('.move-entry');
+    if (entry && reviewIndex !== null) stepReview(Number(entry.dataset.index) + 1);
+});
+document.addEventListener('keydown', (e) => {
+    if (reviewIndex === null || document.querySelector('.modal:not(.hidden)')) return;
+    if (e.key === 'ArrowLeft') stepReview(reviewIndex - 1);
+    else if (e.key === 'ArrowRight') stepReview(reviewIndex + 1);
+    else if (e.key === 'Home') stepReview(0);
+    else if (e.key === 'End') stepReview(Infinity);
+    else return;
+    e.preventDefault();
+});
+
+document.getElementById('game-over-review-btn').addEventListener('click', () => {
+    gameOverDialog.classList.add('hidden');
+    enterReview();
+});
 
 // === New Game dialog ===
 
 function showNewGameDialog() {
+    clearTimeout(gameOverTimer);
     if (isOnlineGame) {
         // Leaving a game still being played resigns it; the opponent is not left waiting.
         const live = !controller.gameOver;
@@ -372,9 +519,9 @@ function showNewGameDialog() {
 
 function updateDialogVisibility() {
     const mode = gameModeSelect.value;
-    const isAI = mode === 'PLAYER_VS_AI' || mode === 'AI_VS_AI';
+    const isAI = mode === 'PLAYER_VS_AI' || mode === 'AI_VS_AI' || mode === 'JIEQI';
     difficultySetting.style.display = isAI ? 'flex' : 'none';
-    colorSetting.style.display = mode === 'PLAYER_VS_AI' ? 'flex' : 'none';
+    colorSetting.style.display = (mode === 'PLAYER_VS_AI' || mode === 'JIEQI') ? 'flex' : 'none';
 }
 
 gameModeSelect.addEventListener('change', updateDialogVisibility);
@@ -384,6 +531,7 @@ cancelBtn.addEventListener('click', () => newGameDialog.classList.add('hidden'))
 
 startGameBtn.addEventListener('click', () => {
     const modeKey = gameModeSelect.value;
+    leaveFinishedGame();
 
     if (modeKey === 'ONLINE') {
         newGameDialog.classList.add('hidden');
@@ -479,6 +627,7 @@ confirmJoinBtn.addEventListener('click', async () => {
         const myPieceColor = color === 'red' ? PieceColor.RED : PieceColor.BLACK;
         controller.setGameMode(GAME_MODE.ONLINE);
         controller.setOnlineColor(myPieceColor);
+        leaveFinishedGame();
         controller.startNewGame();
     boardView.setFlipped(isOnlineGame && controller.myColor === PieceColor.BLACK);
         onlineManager.startListening(); // AFTER startNewGame
@@ -508,18 +657,14 @@ onlineBackBtn.addEventListener('click', () => {
     onlineDialog.classList.add('hidden');
 });
 
-// === Undo / Sound ===
+// === Undo ===
 
 undoBtn.addEventListener('click', () => {
     if (aiThinking || isOnlineGame) return;
+    leaveFinishedGame();
     controller.undoLastMove();
     updateStatus();
     updateMoveHistory();
-});
-
-soundBtn.addEventListener('click', () => {
-    const muted = soundManager.toggleMute();
-    soundBtn.textContent = muted ? t('soundOff') : t('soundOn');
 });
 
 gameOverNewGameBtn.addEventListener('click', () => {
